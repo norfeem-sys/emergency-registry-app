@@ -5,14 +5,15 @@ st.set_page_config(page_title="Emergency Registry", layout="wide")
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub")
 
-# 🔗 Connection Parameter Configuration
+# 🔴 Fixed SPREADSHEET_ID 
 SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
 
-@st.cache_data(ttl=5) # Ultra-fast 5-second window for real-time county testing
+@st.cache_data(ttl=10) # 10-second cache window for fast testing
 def load_live_data(sheet_name):
-    gviz_url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-    df = pd.read_csv(gviz_url)
-    df.columns = df.columns.str.strip() 
+    # FIXED: Reconstructed with the proper structural Google Drive path and direct CSV download formatting
+    direct_export_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
+    df = pd.read_csv(direct_export_url)
+    df.columns = df.columns.str.strip() # Defensive cleanup for column headers
     return df
 
 # Load separate tabs directly into memory by their literal text names
@@ -47,21 +48,19 @@ else:
 if app_mode == "Public Interactive Map":
     st.sidebar.subheader("🌍 Regional Map Filters")
     
-    # 1. STEP 1: State Filter
+    # 1. State Filter
     selected_state = st.sidebar.selectbox("1. Select Target State:", ["FL", "TX", "GA", "All States"])
     
-    # Initial state filtering step
     if selected_state == "All States":
         state_filtered_df = df_orgs.copy()
     else:
         state_filtered_df = df_orgs[(df_orgs["State_Supported_Clean"] == selected_state) | (df_orgs["State_Supported_Clean"] == "All States") | (df_orgs["State_Supported_Clean"] == "Global")]
     
-    # 2. STEP 2: Intelligent County Filter
+    # 2. County Filter
     county_col = next((c for c in df_orgs.columns if 'county' in c.lower() or 'counties' in c.lower()), None)
     unique_counties = ["All Counties"]
     
     if county_col and not state_filtered_df.empty:
-        # Extract unique county text strings, ignoring duplicates or empty cells
         raw_counties = state_filtered_df[county_col].dropna().astype(str).tolist()
         for item in raw_counties:
             for sub_item in item.split(","):
@@ -71,11 +70,9 @@ if app_mode == "Public Interactive Map":
                     
     selected_county = st.sidebar.selectbox("2. Narrow Down by County Scope:", sorted(unique_counties))
     
-    # Execute the secondary County Filter check
     if selected_county == "All Counties":
         filtered_df = state_filtered_df.copy()
     else:
-        # Matches if the organization explicitly names that county OR defaults to covering 'All Counties'
         filtered_df = state_filtered_df[
             state_filtered_df[county_col].astype(str).str.contains(selected_county, case=False) | 
             state_filtered_df[county_col].astype(str).str.contains("All Counties", case=False)
@@ -121,7 +118,7 @@ if app_mode == "Public Interactive Map":
         if selected_org and not filtered_df.empty:
             org_rows = filtered_df[filtered_df["Organization_Name"] == selected_org]
             if not org_rows.empty:
-                org_row = org_rows.iloc[0]
+                org_row = org_rows.iloc[0] # Grab first matching record row positions
                 
                 st.markdown(f"#### 🏢 {org_row.get('Organization_Name', selected_org)}")
                 for key, val in org_row.items():
