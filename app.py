@@ -35,7 +35,7 @@ if app_mode == "Public Interactive Map":
     # Filter dataset matches
     filtered_df = df[(df["State_Supported"] == selected_state) | (df["State_Supported"] == "All States") | (df["State_Supported"] == "Global")]
     
-    col1, col2 = st.columns()
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown(f"### Active Responders Supporting: `{selected_state}`")
         st.dataframe(filtered_df[["Organization_Name", "Primary_ESF", "State_Supported"]], use_container_width=True, hide_index=True)
