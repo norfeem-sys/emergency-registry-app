@@ -8,9 +8,9 @@ st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub")
 # 🔴 HARDCODED WITH YOUR EXACT FULL GOOGLE SPREADSHEET URL
 FULL_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY/edit?usp=sharing"
 
-@st.cache_data(ttl=10) # 10-second fast cache window for rapid deployment testing
+@st.cache_data(ttl=5) # 5-second fast cache window for rapid deployment testing
 def load_live_data(sheet_name):
-    # Dynamically converts the full browser share link into a multi-tab clean CSV stream
+    # CORRECTED PATH CONSTRUCTOR: Dynamically extracts the clean base link without slicing out vital paths
     base_url = FULL_SPREADSHEET_URL.split("/edit")[0]
     direct_export_url = f"{base_url}/export?format=csv&sheet={sheet_name}"
     df = pd.read_csv(direct_export_url)
@@ -106,19 +106,22 @@ if app_mode == "Public Interactive Map":
             map_render = map_ready.rename(columns={lat_col: 'latitude', lon_col: 'longitude'})
             st.map(map_render[['latitude', 'longitude']], size=25)
         else:
-            fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 30.3322], 'longitude': [-81.3792, -82.5307, -81.6557]})
+            fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 33.7490], 'longitude': [-81.3792, -82.5307, -84.3880]})
             st.map(fallback_us_coords, zoom=4)
     else:
-        fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 30.3322], 'longitude': [-81.3792, -82.5307, -81.6557]})
+        fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 33.7490], 'longitude': [-81.3792, -82.5307, -84.3880]})
         st.map(fallback_us_coords, zoom=4)
 
     st.write("---")
 
-    # 📊 DYNAMIC DATAFRAME RENDER ENGINE
-    st.markdown(f"#### 📋 Spreadsheet Data Records ({selected_county} Scope View)")
-    cols_to_show = ["Organization_Name", "Active_Volunteer_Count", "Primary_ESF_Focus", "State_Supported_Clean"]
-    display_df = filtered_df[[c for c in cols_to_show if c in filtered_df.columns] + [c for c in filtered_df.columns if c not in cols_to_show]]
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    # 📊 OPENING SCREEN GEOGRAPHIC TABLE GRID
+    st.markdown(f"#### 📋 Active Responders Registered Region Layout (`{selected_state}` View)")
+    st.write("Review primary operational jurisdictions below. Select an agency from the dropdown to assemble their full dossier summary.")
+    
+    # HIGHLIGHTS GEOGRAPHY: Shows Location metrics instead of raw contact phone listings upfront
+    main_view_cols = ["Organization_Name", "Active_Volunteer_Count", "Primary_ESF_Focus", "State_Supported", "Counties_Covered"]
+    clean_display_cols = [c for c in main_view_cols if c in filtered_df.columns]
+    st.dataframe(filtered_df[clean_display_cols], use_container_width=True, hide_index=True)
     
     st.write("---")
     
@@ -126,26 +129,28 @@ if app_mode == "Public Interactive Map":
     col1, col2 = st.columns(2)
     with col1:
         org_list = filtered_df["Organization_Name"].dropna().tolist() if "Organization_Name" in filtered_df.columns else []
-        selected_org = st.selectbox("Select an organization to expand live details:", org_list)
+        selected_org = st.selectbox("Select an organization to expand dossier profile:", org_list)
         
     with col2:
         if selected_org and not filtered_df.empty:
             org_rows = filtered_df[filtered_df["Organization_Name"] == selected_org]
             if not org_rows.empty:
-                org_row = org_rows.iloc
+                org_row = org_rows.iloc[0]
                 
-                st.markdown(f"#### 🏢 {org_row.get('Organization_Name', selected_org)}")
+                st.markdown(f"### 📋 COMPREHENSIVE DOSSIER: {org_row.get('Organization_Name', selected_org)}")
                 st.warning(f"👥 **Live Personnel Available right now:** {org_row.get('Active_Volunteer_Count', 0)} active volunteers managed.")
+                st.write("---")
                 
                 for key, val in org_row.items():
                     if str(val) != 'nan' and key not in ['Organization_Name', 'Latitude', 'Longitude', 'State_Supported_Clean', 'Active_Volunteer_Count']:
-                        st.write(f"• **{key.replace('_',' ')}**: {val}")
+                        st.write(f"• **{key.replace('_',' ').title()}**: {val}")
                 
                 phone_key = next((k for k in org_row.index if 'phone' in k.lower() or 'contact' in k.lower()), None)
                 if phone_key and str(org_row[phone_key]) != 'nan':
                     raw_phone = str(org_row[phone_key])
                     phone_url = f"tel:{raw_phone.replace('-', '').replace(' ', '').replace('+', '')}"
-                    st.markdown(f'👉 <a href="{phone_url}" style="font-size:18px; font-weight:bold; color:#1f77b4; text-decoration:none;">📲 Click to Call: {raw_phone}</a>', unsafe_allow_html=True)
+                    st.write("---")
+                    st.markdown(f'👉 <a href="{phone_url}" style="font-size:20px; font-weight:bold; color:#2e7d32; text-decoration:none;">📲 CLICK TO DISPATCH LINE: {raw_phone}</a>', unsafe_allow_html=True)
 
 elif app_mode == "🔒 Master Admin Reports":
     st.subheader("📊 Administrative System Integrity Analytics")
