@@ -6,6 +6,9 @@ st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Multi-State Disaster Response Pilot Framework")
 
 # Prepopulated test data for our first online test deployment
+# YOUR GOOGLE SHEET LINK IS DIRECTLY CODED BELOW:
+LIVE_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY/edit?usp=sharing"
+
 @st.cache_data
 def load_bootstrap_data():
     data = {
