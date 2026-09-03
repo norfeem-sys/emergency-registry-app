@@ -42,10 +42,10 @@ if app_mode == "Public Interactive Map":
         selected_org = st.selectbox("Select an organization to expand live details:", filtered_df["Organization_Name"].tolist())
         
     with col2:
-        if selected_org:
-            org_row = filtered_df[filtered_df["Organization_Name"] == selected_org].iloc
-            st.markdown(f"#### 🏢 {org_row['Organization_Name']}")
-            st.markdown(f"**Primary Task Matrix:** `{org_row['Primary_ESF']}`")
+          if selected_org:
+            org_row = filtered_df[filtered_df["Organization_Name"] == selected_org].iloc[0]
+              st.markdown(f"#### 🏢 {org_row['Organization_Name']}")
+             st.markdown(f"**Primary Task Matrix:** `{org_row['Primary_ESF']}`")
             st.info(f"**Logistical Capacity:**\n{org_row['Capacity']}")
             
             # Click to Call Hyperlink Injection
