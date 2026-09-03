@@ -5,14 +5,16 @@ st.set_page_config(page_title="Emergency Registry", layout="wide")
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub")
 
-# 🔗 Connection Parameter Configuration
-SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
+# 🔴 HARDCODED WITH YOUR EXACT FULL GOOGLE SPREADSHEET URL
+FULL_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY/edit?usp=sharing"
 
 @st.cache_data(ttl=10) # 10-second fast cache window for rapid deployment testing
 def load_live_data(sheet_name):
-    direct_export_url = f"https://google.com{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
+    # Dynamically converts the full browser share link into a multi-tab clean CSV stream
+    base_url = FULL_SPREADSHEET_URL.split("/edit")[0]
+    direct_export_url = f"{base_url}/export?format=csv&sheet={sheet_name}"
     df = pd.read_csv(direct_export_url)
-    df.columns = df.columns.str.strip() 
+    df.columns = df.columns.str.strip() # Defensive cleanup for column headers
     return df
 
 # Load separate tabs directly into memory by their literal text names
@@ -45,37 +47,28 @@ else:
     df_orgs["State_Supported_Clean"] = "FL"
 
 # 📊 DATA LINKING ENGINE: Match Volunteers to Organizations
-# Counts how many active volunteers are grouped under each organization ID
 if 'Associated_Org_ID' in df_vols.columns and 'Org_ID' in df_orgs.columns:
-    # Filter for volunteers that are marked 'Available' or 'Deployed' (not inactive)
     active_statuses = ["AVAILABLE", "DEPLOYED", "STANDBY"]
     active_vols = df_vols[df_vols["Availability_Status"].astype(str).str.upper().str.strip().isin(active_statuses)]
-    
     vol_counts = active_vols["Associated_Org_ID"].value_counts().to_dict()
     df_orgs["Active_Volunteer_Count"] = df_orgs["Org_ID"].map(vol_counts).fillna(0).astype(int)
 else:
-    # Fallback safety if columns aren't filled yet
     df_orgs["Active_Volunteer_Count"] = 0
 
 if app_mode == "Public Interactive Map":
     st.sidebar.subheader("🌍 Regional Map Filters")
     
-    # 🌟 NEW FILTER SWITCH: Show All vs Only Teams with Active Personnel
     filter_mode = st.sidebar.radio("Display Priority:", ["Only Show Orgs with Active Volunteers", "Show All Registered Agencies"])
-    
     selected_state = st.sidebar.selectbox("1. Select Target State:", ["All States", "FL", "TX", "GA"])
     
-    # Apply primary state parameters
     if selected_state == "All States":
         state_filtered_df = df_orgs.copy()
     else:
         state_filtered_df = df_orgs[(df_orgs["State_Supported_Clean"] == selected_state) | (df_orgs["State_Supported_Clean"] == "All States") | (df_orgs["State_Supported_Clean"] == "Global")]
     
-    # Apply the Active Volunteer filtering protocol
     if filter_mode == "Only Show Orgs with Active Volunteers":
         state_filtered_df = state_filtered_df[state_filtered_df["Active_Volunteer_Count"] > 0]
     
-    # County Filter Layer
     county_col = next((c for c in df_orgs.columns if 'county' in c.lower() or 'counties' in c.lower()), None)
     unique_counties = ["All Counties"]
     
@@ -99,8 +92,6 @@ if app_mode == "Public Interactive Map":
     
     # 🌍 GEOSPATIAL VISUAL MAPPING BLOCK
     st.markdown(f"### 📍 Active Logistics Map Representation")
-    if filter_mode == "Only Show Orgs with Active Volunteers":
-        st.caption("🔥 Currently filtering map markers to show operational centers with deployed or ready disaster personnel.")
     
     lat_col = next((c for c in df_orgs.columns if c.lower() in ["latitude", "lat"]), None)
     lon_col = next((c for c in df_orgs.columns if c.lower() in ["longitude", "lon", "long"]), None)
@@ -115,25 +106,23 @@ if app_mode == "Public Interactive Map":
             map_render = map_ready.rename(columns={lat_col: 'latitude', lon_col: 'longitude'})
             st.map(map_render[['latitude', 'longitude']], size=25)
         else:
-            fallback_us_coords = pd.DataFrame({'latitude': [28.3852, 31.9686, 32.1656], 'longitude': [-81.5639, -99.9018, -82.9001]})
+            fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 30.3322], 'longitude': [-81.3792, -82.5307, -81.6557]})
             st.map(fallback_us_coords, zoom=4)
     else:
-        fallback_us_coords = pd.DataFrame({'latitude': [28.3852, 31.9686, 32.1656], 'longitude': [-81.5639, -99.9018, -82.9001]})
+        fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 30.3322], 'longitude': [-81.3792, -82.5307, -81.6557]})
         st.map(fallback_us_coords, zoom=4)
 
     st.write("---")
 
     # 📊 DYNAMIC DATAFRAME RENDER ENGINE
     st.markdown(f"#### 📋 Spreadsheet Data Records ({selected_county} Scope View)")
-    
-    # Re-order columns cleanly to bring the volunteer count upfront
     cols_to_show = ["Organization_Name", "Active_Volunteer_Count", "Primary_ESF_Focus", "State_Supported_Clean"]
     display_df = filtered_df[[c for c in cols_to_show if c in filtered_df.columns] + [c for c in filtered_df.columns if c not in cols_to_show]]
     st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     st.write("---")
     
-    # 🔍 DETAILED PROFILE EXPANSION SECTION
+    # 🔍 DETAILED COMPANY DOSSIER EXPANSION SECTION
     col1, col2 = st.columns(2)
     with col1:
         org_list = filtered_df["Organization_Name"].dropna().tolist() if "Organization_Name" in filtered_df.columns else []
@@ -143,7 +132,7 @@ if app_mode == "Public Interactive Map":
         if selected_org and not filtered_df.empty:
             org_rows = filtered_df[filtered_df["Organization_Name"] == selected_org]
             if not org_rows.empty:
-                org_row = org_rows.iloc[0]
+                org_row = org_rows.iloc
                 
                 st.markdown(f"#### 🏢 {org_row.get('Organization_Name', selected_org)}")
                 st.warning(f"👥 **Live Personnel Available right now:** {org_row.get('Active_Volunteer_Count', 0)} active volunteers managed.")
