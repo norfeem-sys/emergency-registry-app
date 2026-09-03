@@ -5,18 +5,17 @@ st.set_page_config(page_title="Emergency Registry", layout="wide")
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub")
 
-# 🔗 Bulletproof Direct Google Sheets Export Matrix Configuration
+# 🔗 Connection Parameter Configuration
 SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
 
-@st.cache_data(ttl=15) # Fast 15-second refresh cycle for immediate database updates
+@st.cache_data(ttl=5) # Ultra-fast 5-second window for real-time county testing
 def load_live_data(sheet_name):
-    # Uses the official direct binary file download stream to stop Google script hijacking
-    csv_export_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
-    df = pd.read_csv(csv_export_url)
-    df.columns = df.columns.str.strip() # Clear column spaces automatically
+    gviz_url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    df = pd.read_csv(gviz_url)
+    df.columns = df.columns.str.strip() 
     return df
 
-# Load tabs directly into memory
+# Load separate tabs directly into memory by their literal text names
 try:
     df_orgs = load_live_data("Organizations")
     df_lookup = load_live_data("State_ESF_Lookup")
@@ -29,21 +28,61 @@ except Exception as e:
 st.sidebar.header("Compass Dashboard Navigation")
 app_mode = st.sidebar.radio("Go to view:", ["Public Interactive Map", "🔒 Master Admin Reports"])
 
-# Uniform dynamic header protection
-for col in ["State_Supported", "State Supported"]:
-    if col in df_orgs.columns:
-        df_orgs["State_Supported_Clean"] = df_orgs[col]
-if "State_Supported_Clean" not in df_orgs.columns:
+# 🔄 INTELLIGENT STATE TRANSLATOR MATRIX
+def clean_state_value(val):
+    text = str(val).strip().upper()
+    if "FLORIDA" in text or text == "FL": return "FL"
+    elif "TEXAS" in text or text == "TX": return "TX"
+    elif "GEORGIA" in text or text == "GA": return "GA"
+    elif "GLOBAL" in text: return "Global"
+    elif "ALL" in text: return "All States"
+    return text
+
+state_col = next((c for c in df_orgs.columns if 'state' in c.lower()), None)
+if state_col:
+    df_orgs["State_Supported_Clean"] = df_orgs[state_col].apply(clean_state_value)
+else:
     df_orgs["State_Supported_Clean"] = "FL"
 
 if app_mode == "Public Interactive Map":
-    st.sidebar.subheader("Map Filters")
-    selected_state = st.sidebar.selectbox("Select State Horizon:", ["FL", "TX", "GA", "All States"])
+    st.sidebar.subheader("🌍 Regional Map Filters")
     
-    filtered_df = df_orgs[(df_orgs["State_Supported_Clean"] == selected_state) | (df_orgs["State_Supported_Clean"] == "All States") | (df_orgs["State_Supported_Clean"] == "Global")]
+    # 1. STEP 1: State Filter
+    selected_state = st.sidebar.selectbox("1. Select Target State:", ["FL", "TX", "GA", "All States"])
+    
+    # Initial state filtering step
+    if selected_state == "All States":
+        state_filtered_df = df_orgs.copy()
+    else:
+        state_filtered_df = df_orgs[(df_orgs["State_Supported_Clean"] == selected_state) | (df_orgs["State_Supported_Clean"] == "All States") | (df_orgs["State_Supported_Clean"] == "Global")]
+    
+    # 2. STEP 2: Intelligent County Filter
+    county_col = next((c for c in df_orgs.columns if 'county' in c.lower() or 'counties' in c.lower()), None)
+    unique_counties = ["All Counties"]
+    
+    if county_col and not state_filtered_df.empty:
+        # Extract unique county text strings, ignoring duplicates or empty cells
+        raw_counties = state_filtered_df[county_col].dropna().astype(str).tolist()
+        for item in raw_counties:
+            for sub_item in item.split(","):
+                cleaned_item = sub_item.strip()
+                if cleaned_item and cleaned_item.upper() != "ALL COUNTIES" and cleaned_item not in unique_counties:
+                    unique_counties.append(cleaned_item)
+                    
+    selected_county = st.sidebar.selectbox("2. Narrow Down by County Scope:", sorted(unique_counties))
+    
+    # Execute the secondary County Filter check
+    if selected_county == "All Counties":
+        filtered_df = state_filtered_df.copy()
+    else:
+        # Matches if the organization explicitly names that county OR defaults to covering 'All Counties'
+        filtered_df = state_filtered_df[
+            state_filtered_df[county_col].astype(str).str.contains(selected_county, case=False) | 
+            state_filtered_df[county_col].astype(str).str.contains("All Counties", case=False)
+        ]
     
     # 🌍 GEOSPATIAL VISUAL MAPPING BLOCK
-    st.markdown("### 📍 Active Logistics Map Representation")
+    st.markdown(f"### 📍 Active Logistics Map Representation ({selected_state} — {selected_county})")
     
     lat_col = next((c for c in df_orgs.columns if c.lower() in ["latitude", "lat"]), None)
     lon_col = next((c for c in df_orgs.columns if c.lower() in ["longitude", "lon", "long"]), None)
@@ -61,13 +100,13 @@ if app_mode == "Public Interactive Map":
             fallback_us_coords = pd.DataFrame({'latitude': [28.3852, 31.9686, 32.1656], 'longitude': [-81.5639, -99.9018, -82.9001]})
             st.map(fallback_us_coords, zoom=4)
     else:
-        fallback_us_coords = pd.DataFrame({'latitude': [28.3852], 'longitude': [-81.5639]})
+        fallback_us_coords = pd.DataFrame({'latitude': [28.3852, 31.9686, 32.1656], 'longitude': [-81.5639, -99.9018, -82.9001]})
         st.map(fallback_us_coords, zoom=4)
 
     st.write("---")
 
     # 📊 DYNAMIC DATAFRAME RENDER ENGINE
-    st.markdown(f"#### 📋 Spreadsheet Data Records (`{selected_state}` View)")
+    st.markdown(f"#### 📋 Spreadsheet Data Records ({selected_county} Scope View)")
     st.dataframe(filtered_df, use_container_width=True, hide_index=True)
     
     st.write("---")
