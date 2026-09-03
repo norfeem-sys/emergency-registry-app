@@ -10,10 +10,10 @@ FULL_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CAXvQUPhOfq2QAxq
 
 @st.cache_data(ttl=5) # 5-second fast cache window for rapid deployment testing
 def load_live_data(sheet_name):
-    # CORRECTED PATH CONSTRUCTOR: Dynamically extracts the clean base link without slicing out vital paths
+    # FIXED: Reconstructed url structure to force Google to respect separate tabs by literal name
     base_url = FULL_SPREADSHEET_URL.split("/edit")[0]
-    direct_export_url = f"{base_url}/export?format=csv&sheet={sheet_name}"
-    df = pd.read_csv(direct_export_url)
+    gviz_export_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    df = pd.read_csv(gviz_export_url)
     df.columns = df.columns.str.strip() # Defensive cleanup for column headers
     return df
 
@@ -58,7 +58,7 @@ else:
 if app_mode == "Public Interactive Map":
     st.sidebar.subheader("🌍 Regional Map Filters")
     
-    filter_mode = st.sidebar.radio("Display Priority:", ["Only Show Orgs with Active Volunteers", "Show All Registered Agencies"])
+    filter_mode = st.sidebar.radio("Display Priority:", ["Show All Registered Agencies", "Only Show Orgs with Active Volunteers"])
     selected_state = st.sidebar.selectbox("1. Select Target State:", ["All States", "FL", "TX", "GA"])
     
     if selected_state == "All States":
@@ -114,21 +114,25 @@ if app_mode == "Public Interactive Map":
 
     st.write("---")
 
-    # 📊 OPENING SCREEN GEOGRAPHIC TABLE GRID
+    # 📊 MAIN TABULAR RENDER ENGINE: Focuses explicitly on Organizations
     st.markdown(f"#### 📋 Active Responders Registered Region Layout (`{selected_state}` View)")
-    st.write("Review primary operational jurisdictions below. Select an agency from the dropdown to assemble their full dossier summary.")
+    st.write("Review primary operational jurisdictions below. Select an organization from the dropdown to extract their dossier profile.")
     
-    # HIGHLIGHTS GEOGRAPHY: Shows Location metrics instead of raw contact phone listings upfront
+    # Ensuring specific Company/Jurisdiction metrics are shown upfront instead of volunteer strings
     main_view_cols = ["Organization_Name", "Active_Volunteer_Count", "Primary_ESF_Focus", "State_Supported", "Counties_Covered"]
     clean_display_cols = [c for c in main_view_cols if c in filtered_df.columns]
-    st.dataframe(filtered_df[clean_display_cols], use_container_width=True, hide_index=True)
+    
+    if not filtered_df.empty and "Organization_Name" in filtered_df.columns:
+        st.dataframe(filtered_df[clean_display_cols], use_container_width=True, hide_index=True)
+    else:
+        st.info("No matching organizations found for this filter criteria.")
     
     st.write("---")
     
-    # 🔍 DETAILED COMPANY DOSSIER EXPANSION SECTION
+    # 🔍 DETAILED COMPANY DOSSIER SELECTION MATRIX
     col1, col2 = st.columns(2)
     with col1:
-        org_list = filtered_df["Organization_Name"].dropna().tolist() if "Organization_Name" in filtered_df.columns else []
+        org_list = filtered_df["Organization_Name"].dropna().tolist() if ("Organization_Name" in filtered_df.columns and not filtered_df.empty) else []
         selected_org = st.selectbox("Select an organization to expand dossier profile:", org_list)
         
     with col2:
@@ -138,7 +142,7 @@ if app_mode == "Public Interactive Map":
                 org_row = org_rows.iloc[0]
                 
                 st.markdown(f"### 📋 COMPREHENSIVE DOSSIER: {org_row.get('Organization_Name', selected_org)}")
-                st.warning(f"👥 **Live Personnel Available right now:** {org_row.get('Active_Volunteer_Count', 0)} active volunteers managed.")
+                st.success(f"👥 **Live Personnel Available right now:** {org_row.get('Active_Volunteer_Count', 0)} active volunteers managed.")
                 st.write("---")
                 
                 for key, val in org_row.items():
