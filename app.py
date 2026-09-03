@@ -5,15 +5,14 @@ st.set_page_config(page_title="Emergency Registry", layout="wide")
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub")
 
-# 🔴 Fixed SPREADSHEET_ID 
+# 🔗 Connection Parameter Configuration
 SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
 
-@st.cache_data(ttl=10) # 10-second cache window for fast testing
+@st.cache_data(ttl=10) # 10-second fast cache window for rapid deployment testing
 def load_live_data(sheet_name):
-    # FIXED: Reconstructed with the proper structural Google Drive path and direct CSV download formatting
-    direct_export_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
+    direct_export_url = f"https://google.com{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
     df = pd.read_csv(direct_export_url)
-    df.columns = df.columns.str.strip() # Defensive cleanup for column headers
+    df.columns = df.columns.str.strip() 
     return df
 
 # Load separate tabs directly into memory by their literal text names
@@ -29,7 +28,7 @@ except Exception as e:
 st.sidebar.header("Compass Dashboard Navigation")
 app_mode = st.sidebar.radio("Go to view:", ["Public Interactive Map", "🔒 Master Admin Reports"])
 
-# 🔄 INTELLIGENT STATE TRANSLATOR MATRIX
+# 🔄 STATE TRANSLATOR ENGINE
 def clean_state_value(val):
     text = str(val).strip().upper()
     if "FLORIDA" in text or text == "FL": return "FL"
@@ -45,18 +44,38 @@ if state_col:
 else:
     df_orgs["State_Supported_Clean"] = "FL"
 
+# 📊 DATA LINKING ENGINE: Match Volunteers to Organizations
+# Counts how many active volunteers are grouped under each organization ID
+if 'Associated_Org_ID' in df_vols.columns and 'Org_ID' in df_orgs.columns:
+    # Filter for volunteers that are marked 'Available' or 'Deployed' (not inactive)
+    active_statuses = ["AVAILABLE", "DEPLOYED", "STANDBY"]
+    active_vols = df_vols[df_vols["Availability_Status"].astype(str).str.upper().str.strip().isin(active_statuses)]
+    
+    vol_counts = active_vols["Associated_Org_ID"].value_counts().to_dict()
+    df_orgs["Active_Volunteer_Count"] = df_orgs["Org_ID"].map(vol_counts).fillna(0).astype(int)
+else:
+    # Fallback safety if columns aren't filled yet
+    df_orgs["Active_Volunteer_Count"] = 0
+
 if app_mode == "Public Interactive Map":
     st.sidebar.subheader("🌍 Regional Map Filters")
     
-    # 1. State Filter
-    selected_state = st.sidebar.selectbox("1. Select Target State:", ["FL", "TX", "GA", "All States"])
+    # 🌟 NEW FILTER SWITCH: Show All vs Only Teams with Active Personnel
+    filter_mode = st.sidebar.radio("Display Priority:", ["Only Show Orgs with Active Volunteers", "Show All Registered Agencies"])
     
+    selected_state = st.sidebar.selectbox("1. Select Target State:", ["All States", "FL", "TX", "GA"])
+    
+    # Apply primary state parameters
     if selected_state == "All States":
         state_filtered_df = df_orgs.copy()
     else:
         state_filtered_df = df_orgs[(df_orgs["State_Supported_Clean"] == selected_state) | (df_orgs["State_Supported_Clean"] == "All States") | (df_orgs["State_Supported_Clean"] == "Global")]
     
-    # 2. County Filter
+    # Apply the Active Volunteer filtering protocol
+    if filter_mode == "Only Show Orgs with Active Volunteers":
+        state_filtered_df = state_filtered_df[state_filtered_df["Active_Volunteer_Count"] > 0]
+    
+    # County Filter Layer
     county_col = next((c for c in df_orgs.columns if 'county' in c.lower() or 'counties' in c.lower()), None)
     unique_counties = ["All Counties"]
     
@@ -79,7 +98,9 @@ if app_mode == "Public Interactive Map":
         ]
     
     # 🌍 GEOSPATIAL VISUAL MAPPING BLOCK
-    st.markdown(f"### 📍 Active Logistics Map Representation ({selected_state} — {selected_county})")
+    st.markdown(f"### 📍 Active Logistics Map Representation")
+    if filter_mode == "Only Show Orgs with Active Volunteers":
+        st.caption("🔥 Currently filtering map markers to show operational centers with deployed or ready disaster personnel.")
     
     lat_col = next((c for c in df_orgs.columns if c.lower() in ["latitude", "lat"]), None)
     lon_col = next((c for c in df_orgs.columns if c.lower() in ["longitude", "lon", "long"]), None)
@@ -104,7 +125,11 @@ if app_mode == "Public Interactive Map":
 
     # 📊 DYNAMIC DATAFRAME RENDER ENGINE
     st.markdown(f"#### 📋 Spreadsheet Data Records ({selected_county} Scope View)")
-    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+    
+    # Re-order columns cleanly to bring the volunteer count upfront
+    cols_to_show = ["Organization_Name", "Active_Volunteer_Count", "Primary_ESF_Focus", "State_Supported_Clean"]
+    display_df = filtered_df[[c for c in cols_to_show if c in filtered_df.columns] + [c for c in filtered_df.columns if c not in cols_to_show]]
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     st.write("---")
     
@@ -118,11 +143,13 @@ if app_mode == "Public Interactive Map":
         if selected_org and not filtered_df.empty:
             org_rows = filtered_df[filtered_df["Organization_Name"] == selected_org]
             if not org_rows.empty:
-                org_row = org_rows.iloc[0] # Grab first matching record row positions
+                org_row = org_rows.iloc[0]
                 
                 st.markdown(f"#### 🏢 {org_row.get('Organization_Name', selected_org)}")
+                st.warning(f"👥 **Live Personnel Available right now:** {org_row.get('Active_Volunteer_Count', 0)} active volunteers managed.")
+                
                 for key, val in org_row.items():
-                    if str(val) != 'nan' and key not in ['Organization_Name', 'Latitude', 'Longitude', 'State_Supported_Clean']:
+                    if str(val) != 'nan' and key not in ['Organization_Name', 'Latitude', 'Longitude', 'State_Supported_Clean', 'Active_Volunteer_Count']:
                         st.write(f"• **{key.replace('_',' ')}**: {val}")
                 
                 phone_key = next((k for k in org_row.index if 'phone' in k.lower() or 'contact' in k.lower()), None)
