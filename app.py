@@ -18,7 +18,7 @@ def load_live_data(sheet_name):
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
-        # Integrated robust fallback data if connection is blocked during a presentation
+        # Integrated fallback generation if Google Sheet pipeline fails to return structures during testing
         if sheet_name == "Organizations":
             return pd.DataFrame({
                 "Org_ID": ["ORG-GL-001", "ORG-REG-002", "ORG-ST-003"],
@@ -136,9 +136,9 @@ with tab_signup:
             if not s_name:
                 st.error("❌ Submission failed: Please declare an official Organization Name.")
             else:
-                st.success(f"🎉 **Intake Processing Success!** **'{s_name}'** has been safely captured into the ingestion queue matrix under ID code `ORG-PEND-{len(df_orgs)+1}`. Account status locked to: `PENDING_REVIEW`.")
+                st.success(f"🎉 **Intake Processing Success!** **'{s_name}'** has been safely captured into the Ingestion queue matrix. Account status locked to: `PENDING_REVIEW`.")
                 st.json({
-                    "Org_ID": f"ORG-PEND-{len(df_orgs)+1}",
+                    "Org_ID": "ORG-PENDING-NEW",
                     "Organization_Name": s_name,
                     "Operational_Tier": s_tier,
                     "Lifecycle_Status": "PENDING_REVIEW",
