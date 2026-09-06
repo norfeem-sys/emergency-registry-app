@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Emergency Registry - Multi-View Portal", layout="wide")
+st.set_page_config(page_title="Emergency Registry - Setup Prototype", layout="wide")
 
 # ==============================================================================
 # 🗃️ LIVE DATABASE PIPELINE INGESTION ENGINE
