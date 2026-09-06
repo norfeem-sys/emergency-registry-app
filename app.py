@@ -158,7 +158,7 @@ with tab_team:
     st.write("---")
     st.markdown(f"##### 👤 Provision New User to **{selected_parent_agency}**")
     
-                    "Agency Team Admin (Can modify entire organization dossier profile)",
+                        "Agency Team Admin (Can modify entire organization dossier profile)",
                     "Dispatch Coordinator (Can update map coordinates and track active volunteers)",
                     "Field Operator (Read-only access to localized disaster map data)",
                     "Data Entry Assistant (Upload or append text logs to lists)"
