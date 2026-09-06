@@ -158,13 +158,29 @@ with tab_team:
     st.write("---")
     st.markdown(f"##### 👤 Provision New User to **{selected_parent_agency}**")
     
-    with st.form("team_role_provision_form"):
-        col_u1, col_u2 = st.columns(2)
-        with col_u1:
-            u_name = st.text_input("User Full Legal Name:")
-            u_email = st.text_input("Professional Email Address Identity:")
-        with col_u2:
-            u_role = st.selectbox(
-                "Assign Internal System Operational Role:",
-                [
                     "Agency Team Admin (Can modify entire organization dossier profile)",
+                    "Dispatch Coordinator (Can update map coordinates and track active volunteers)",
+                    "Field Operator (Read-only access to localized disaster map data)",
+                    "Data Entry Assistant (Upload or append text logs to lists)"
+                ]
+            )
+            
+        submit_user = st.form_submit_button("Add User & Provision Role Permissions")
+        
+        if submit_user:
+            if not u_name or not u_email:
+                st.error("❌ Provisioning failed: Full Name and Email fields are strictly required.")
+            else:
+                st.success(f"🎉 Role Provisioned Successfully! Onboarded {u_name} into the system permissions table.")
+                
+                # Simplified tracking variables to prevent string parsing errors
+                clean_prefix = str(u_name[:3]).upper().strip()
+                
+                # Render clear text report directly to ensure no characters get cut off
+                st.markdown("##### 🔐 Generated Access Identity Record Matrix:")
+                st.text(f"PARENT AGENCY:   {selected_parent_agency.upper()}")
+                st.text(f"USER UNIQUE ID:  USR-MOCK-{clean_prefix}-01")
+                st.text(f"FULL LEGAL NAME: {u_name}")
+                st.text(f"EMAIL PATHWAY:   {u_email}")
+                st.text(f"ASSIGNED ROLE:   {u_role}")
+                st.text(f"STATUS ACCESS:   ACTIVE_AUTHORIZED_TEAM_MEMBER")
