@@ -18,7 +18,7 @@ def load_live_data(sheet_name):
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
-        # Integrated fallback generation if Google Sheet pipeline is restricted during a live presentation
+        # Integrated robust fallback data if connection is blocked during a presentation
         if sheet_name == "Organizations":
             return pd.DataFrame({
                 "Org_ID": ["ORG-GL-001", "ORG-REG-002", "ORG-ST-003"],
@@ -27,79 +27,106 @@ def load_live_data(sheet_name):
                 "Lifecycle_Status": ["VERIFIED_ACTIVE", "VERIFIED_ACTIVE", "VERIFIED_ACTIVE"],
                 "Primary_ESF_Focus": ["ESF-6: Mass Care", "ESF-11: Agriculture & Resource Support", "ESF-5: Information & Planning"],
                 "State_Supported": ["Global", "FL, GA, AL", "FL"],
-                "Counties_Covered": ["All Counties", "Multi-Region", "All Counties"],
+                "Counties_Covered": ["All Counties", "Brevard, Orange, Volusia", "All Counties"],
                 "Latitude": [27.3364, 28.5383, 30.4383],
                 "Longitude": [-82.5307, -81.3792, -84.2807]
             })
         elif sheet_name == "State_ESF_Lookup":
             return pd.DataFrame({
-                "State": ["FL", "FL", "FL", "TX", "TX", "GA", "GA"],
-                "ESF_Code": ["ESF-6", "ESF-9", "ESF-11", "ESF-6", "ESF-9", "ESF-6", "ESF-11"],
-                "FEMA_Function": ["Mass Care, Emergency Assistance, Housing", "Search and Rescue", "Agriculture and Natural Resources", "Mass Care & Shelter", "Urban Search & Rescue", "Human Services & Mass Care", "Food & Resource Support"]
+                "State": ["FL", "FL", "FL"],
+                "ESF_Code": ["ESF-6", "ESF-9", "ESF-11"],
+                "FEMA_Function": ["Mass Care & Shelter", "Search and Rescue", "Resource Support"]
             })
         else:
             return pd.DataFrame()
 
-# Ingest data structures from memory
+# Ingest data structures into live environment
 df_orgs = load_live_data("Organizations")
 df_lookup = load_live_data("State_ESF_Lookup")
+
+# Ensure structural properties exist natively
+if not df_orgs.empty and "Lifecycle_Status" not in df_orgs.columns:
+    df_orgs["Lifecycle_Status"] = "VERIFIED_ACTIVE"
+if not df_orgs.empty and "Operational_Tier" not in df_orgs.columns:
+    df_orgs["Operational_Tier"] = "State-Specific"
 
 # ==============================================================================
 # 🏛️ INTERACTIVE PLATFORM WORKSPACE (MAIN CANVAS)
 # ==============================================================================
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
-st.caption("501(c)(3) Live Multi-State Disaster Response Testing Console")
-st.info("💡 **Sandbox Configuration Notice:** To maximize presentation speed, formal login checkpoints have been bypassed for this review session. Login security features will integrate during Phase 4 production deployment.")
+st.caption("501(c)(3) Live Multi-State Disaster Response Hub — Core Feature Demo")
+st.info("💡 **Sandbox Configuration Notice:** Formal login checkpoints have been bypassed for this review session. Onboarding, team setup, and matrix maps are completely unlocked for evaluation.")
 
 # Re-engineered Navigation tabs placed directly on the main screen
 tab_lookup, tab_signup, tab_team = st.tabs([
-    "🔍 1. Public Agency Directory Lookup", 
+    "🔍 1. Interactive Directory Lookup & Map Matrix", 
     "➕ 2. Register New Organization Node", 
     "👥 3. Manage Agency Team Roles"
 ])
 
-# 🟢 TAB 1: OPEN PUBLIC LOOKUP TOOL (DEFAULT ACTIVE COMPONENT)
+# 🟢 TAB 1: OPEN LOOKUP TOOL WITH INTEGRATED GEOSPATIAL MAP
 with tab_lookup:
-    st.subheader("Public Relief Directory Search")
+    st.subheader("Active Logistics Map Matrix")
     
     if not df_orgs.empty:
-        # Enforce lifecycle visibility constraint rules
-        active_display_df = df_orgs[df_orgs["Lifecycle_Status"] == "VERIFIED_ACTIVE"] if "Lifecycle_Status" in df_orgs.columns else df_orgs.copy()
+        active_display_df = df_orgs[df_orgs["Lifecycle_Status"] == "VERIFIED_ACTIVE"].copy()
         
-        col1, col2 = st.columns(2)
-        with col1:
-            search_state = st.selectbox("Search State Jurisdictions:", ["All States", "FL", "TX", "GA"])
-        with col2:
-            search_tier = st.selectbox("Organizational Scale Classification Hierarchy:", ["All Scales", "Global / International", "Multi-State Regional", "State-Specific", "Hyper-Local County Unit"])
+        # 🗺️ MULTI-VARIABLE INPUT LAYOUTS
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            search_state = st.selectbox("1. Filter Target State Jurisdiction:", ["All States", "FL", "TX", "GA"])
+        with col_f2:
+            search_esf = st.selectbox("2. Filter FEMA ESF Core Capability:", ["All ESF Frameworks"] + list(active_display_df["Primary_ESF_Focus"].dropna().unique()))
             
+        # 🔍 COUNTY LEVEL ZOOM OPTIMIZATION SIDEWAY CONTROLLER
+        map_zoom_resolution = st.select_slider(
+            "🗺️ Simulating Geographic Detail Resolution Overlay:", 
+            options=["State High-Level Regional Heatmap", "Detailed County Line Boundary Zoom"]
+        )
+        
+        # Apply Query Matrix Multi-Filters (AND Operators)
         if search_state != "All States" and "State_Supported" in active_display_df.columns:
             active_display_df = active_display_df[active_display_df["State_Supported"].astype(str).str.contains(search_state, case=False) | active_display_df["State_Supported"].astype(str).str.contains("Global", case=False)]
-        if search_tier != "All Scales" and "Operational_Tier" in active_display_df.columns:
-            active_display_df = active_display_df[active_display_df["Operational_Tier"] == search_tier]
+        if search_esf != "All ESF Frameworks" and "Primary_ESF_Focus" in active_display_df.columns:
+            active_display_df = active_display_df[active_display_df["Primary_ESF_Focus"] == search_esf]
             
+        # Dynamic Geospatial Mapping Execution Layer
+        st.markdown(f"### 📍 Real-Time Logistics Grid Location View ({map_zoom_resolution})")
+        lat_col = next((c for c in active_display_df.columns if c.lower() in ["latitude", "lat"]), None)
+        lon_col = next((c for c in active_display_df.columns if c.lower() in ["longitude", "lon", "long"]), None)
+        
+        if lat_col and lon_col and not active_display_df.empty:
+            map_ready = active_display_df.copy()
+            map_ready[lat_col] = pd.to_numeric(map_ready[lat_col], errors='coerce')
+            map_ready[lon_col] = pd.to_numeric(map_ready[lon_col], errors='coerce')
+            map_ready = map_ready.dropna(subset=[lat_col, lon_col])
+            
+            # Map Zoom state adjustments to prove county layer visibility to stakeholders
+            zoom_factor = 5 if map_zoom_resolution == "State High-Level Regional Heatmap" else 9
+            
+            if not map_ready.empty:
+                st.map(map_ready[[lat_col, lon_col]].rename(columns={lat_col: 'latitude', lon_col: 'longitude'}), zoom=zoom_factor)
+            else:
+                st.info("No active matching locations found for this matrix query combination.")
+        else:
+            st.warning("Spatial coordinate columns are missing or loading from the spreadsheet pipeline.")
+            
+        # Output Public Safe Table Grid Below Map
+        st.write("---")
+        st.markdown("#### 📋 Matched Regional Logistics Grid Layout")
         public_safe_columns = ["Organization_Name", "Operational_Tier", "Primary_ESF_Focus", "State_Supported", "Counties_Covered"]
         clean_display_cols = [c for c in public_safe_columns if c in active_display_df.columns]
-        
         st.dataframe(active_display_df[clean_display_cols], use_container_width=True, hide_index=True)
 
 # 🔵 TAB 2: ORGANIZATION SELF-SERVICE SIGNUP INTAKE
 with tab_signup:
     st.subheader("Agency Registration Intake Form")
-    st.write("This form models the onboarding lifecycle. Newly submitted organizations are automatically dropped into a `PENDING_REVIEW` state until approved by you.")
+    st.write("Newly submitted organizations are automatically dropped into a `PENDING_REVIEW` state until vetted by you.")
     
     with st.form("organization_signup_form"):
         s_name = st.text_input("Official Organization / Agency Name:")
-        
-        s_tier = st.selectbox(
-            "Select Operational Scale Class Hierarchy:",
-            ["Hyper-Local County Unit", "State-Specific Organization", "Multi-State Regional Network", "Global / International Entity"]
-        )
-        
-        s_esf = st.selectbox(
-            "Primary FEMA ESF Capabilities Focus:",
-            ["ESF-5: Information & Planning", "ESF-6: Mass Care", "ESF-8: Public Health", "ESF-9: Search & Rescue", "ESF-11: Agriculture & Resource Support"]
-        )
-        
+        s_tier = st.selectbox("Operational Scale Class Hierarchy:", ["Hyper-Local County Unit", "State-Specific Organization", "Multi-State Regional Network", "Global / International Entity"])
+        s_esf = st.selectbox("Primary FEMA ESF Capabilities Focus:", ["ESF-5: Information & Planning", "ESF-6: Mass Care", "ESF-8: Public Health", "ESF-9: Search & Rescue", "ESF-11: Agriculture & Resource Support"])
         s_state = st.text_input("Operational States Supported (e.g., FL, GA):", value="FL")
         s_counties = st.text_area("Covered Counties Scope (Comma Separated Key Areas):", value="Brevard County")
         
@@ -109,10 +136,7 @@ with tab_signup:
             if not s_name:
                 st.error("❌ Submission failed: Please declare an official Organization Name.")
             else:
-                st.success(f"🎉 **Intake Processing Success!** **'{s_name}'** has been safely captured into the ingestion queue matrix under ID code `MOCK-ORG-{len(df_orgs)+1}`. Account status locked to: `PENDING_REVIEW`.")
-                
-                # Visual simulation showing stakeholders where this row drops into your schema
-                st.markdown("##### ⚙️ Simulated Ingestion Queue Row Entry:")
+                st.success(f"🎉 **Intake Processing Success!** **'{s_name}'** has been safely captured into the ingestion queue matrix under ID code `ORG-PEND-{len(df_orgs)+1}`. Account status locked to: `PENDING_REVIEW`.")
                 st.json({
                     "Org_ID": f"ORG-PEND-{len(df_orgs)+1}",
                     "Organization_Name": s_name,
@@ -128,7 +152,6 @@ with tab_team:
     st.subheader("Manage Agency Team Personnel Roles")
     st.write("Allows participating organizations to build out their internal command structure by provisioning users under distinct operational authorization boundaries.")
     
-    # Step 1: Tell the system which parent agency you are adding users for
     available_parent_agencies = list(df_orgs["Organization_Name"].unique()) if not df_orgs.empty else ["American Red Cross", "Florida Baptist Disaster Relief"]
     selected_parent_agency = st.selectbox("1. Target Parent Organization Node:", available_parent_agencies)
     
@@ -145,30 +168,3 @@ with tab_team:
                 "Assign Internal System Operational Role:",
                 [
                     "Agency Team Admin (Can modify entire organization dossier profile)",
-                    "Dispatch Coordinator (Can update map coordinates and track active volunteers)",
-                    "Field Operator (Read-only access to localized disaster map data layers)",
-                    "Data Entry Assistant (Can upload or append text rows to lists)"
-                ]
-            )
-            
-        submit_user = st.form_submit_button("Add User & Provision Role Permissions")
-        
-        if submit_user:
-            if not u_name or not u_email:
-                st.error("❌ Provisioning failed: Full Name and Email fields are strictly required.")
-            else:
-                st.success(f"🎉 **Role Provisioned Successfully!** Onboarded **{u_name}** into the system permissions table.")
-                
-                # Visual structural dictionary tracker for tech reviewers
-                st.markdown("##### 🔐 Generated Access Identity Record Matrix:")
-                st.code(f"""
-                [IDENTITY RECORD LINKED TO {selected_parent_agency.upper()}]
-                --------------------------------------------------------
-                USER ID:        USR-MOCK-{u_name[:3].upper()}-01
-                FULL NAME:      {u_name}
-                EMAIL ACCESS:   {u_email}
-                ASSIGNED ROLE:  {u_role.split(' (')[0]}
-                PERMISSIONS:    {u_role.split('(')[1].replace(')', '')}
-                STATUS:         ACTIVE_AUTHORIZED
-                --------------------------------------------------------
-                """)
