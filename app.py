@@ -1,6 +1,174 @@
 import streamlit as st
 import pandas as pd
 
+st.set_page_config(page_title="Emergency Registry - Multi-View Portal", layout="wide")
+
+# ==============================================================================
+# 🗃️ LIVE DATABASE PIPELINE INGESTION ENGINE
+# ==============================================================================
+# 🔴 HARDCODED WITH YOUR EXACT FULL GOOGLE SPREADSHEET URL
+FULL_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY/edit?usp=sharing"
+
+@st.cache_data(ttl=5)
+def load_live_data(sheet_name):
+    try:
+        base_url = FULL_SPREADSHEET_URL.split("/edit")[0]
+        gviz_export_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+        df = pd.read_csv(gviz_export_url)
+        df.columns = df.columns.str.strip()
+        return df
+    except Exception as e:
+        # Integrated fallback generation if Google Sheet pipeline fails to return structures during testing
+        if sheet_name == "Organizations":
+            return pd.DataFrame({
+                "Org_ID": ["ORG-GL-001", "ORG-REG-002", "ORG-ST-003", "ORG-LOC-004"],
+                "Organization_Name": ["American Red Cross (Global Network)", "Florida Baptist Disaster Relief", "Florida State Emergency Management Branch", "Brevard County SAR Rescue Team"],
+                "Operational_Tier": ["Global / International", "Multi-State Regional", "State-Specific", "Hyper-Local County Unit"],
+                "Lifecycle_Status": ["VERIFIED_ACTIVE", "VERIFIED_ACTIVE", "VERIFIED_ACTIVE", "PENDING_REVIEW"],
+                "Primary_ESF_Focus": ["ESF-6: Mass Care", "ESF-11: Agriculture & Resource Support", "ESF-5: Information & Planning", "ESF-9: Search & Rescue"],
+                "State_Supported": ["Global", "FL, GA, AL", "FL", "FL"],
+                "Counties_Covered": ["All Counties", "Multi-Region", "All Counties", "Brevard County"],
+                "Latitude": [27.3364, 28.5383, 30.4383, 28.2639],
+                "Longitude": [-82.5307, -81.3792, -84.2807, -80.7214]
+            })
+        elif sheet_name == "Volunteers":
+            return pd.DataFrame({"Associated_Org_ID": ["ORG-GL-001", "ORG-REG-002"], "Availability_Status": ["AVAILABLE", "AVAILABLE"]})
+        else:
+            return pd.DataFrame()
+
+# Ingest data structures from memory
+df_orgs = load_live_data("Organizations")
+df_lookup = load_live_data("State_ESF_Lookup")
+df_vols = load_live_data("Volunteers")
+
+# Ensure tracking metrics exist natively
+if not df_orgs.empty and "Lifecycle_Status" not in df_orgs.columns:
+    df_orgs["Lifecycle_Status"] = "VERIFIED_ACTIVE"
+if not df_orgs.empty and "Operational_Tier" not in df_orgs.columns:
+    df_orgs["Operational_Tier"] = "State-Specific"
+
+# Linked Aggregate Personnel Matrix Counting Loop
+if not df_vols.empty and 'Associated_Org_ID' in df_vols.columns and not df_orgs.empty and 'Org_ID' in df_orgs.columns:
+    active_statuses = ["AVAILABLE", "DEPLOYED", "STANDBY"]
+    active_vols = df_vols[df_vols["Availability_Status"].astype(str).str.upper().str.strip().isin(active_statuses)]
+    vol_counts = active_vols["Associated_Org_ID"].value_counts().to_dict()
+    df_orgs["Active_Volunteer_Count"] = df_orgs["Org_ID"].map(vol_counts).fillna(0).astype(int)
+else:
+    if not df_orgs.empty:
+        df_orgs["Active_Volunteer_Count"] = 0
+
+
+# ==============================================================================
+# 🔑 CENTRAL MAIN SCREEN SIGN-IN PORTAL LAYER
+# ==============================================================================
+st.title("🗺️ National Volunteer & Organization Emergency Registry")
+st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub")
+
+# Main Screen Interactive Sign-In Accordion Engine
+with st.expander("🔐 CENTRAL GATEWAY PORTAL SIGN-IN (Click to Open Safe Authorized Views)", expanded=False):
+    st.markdown("#### Authorized Identity Validation Panel")
+    
+    # Establish local layout grids for forms
+    login_col1, login_col2 = st.columns(2)
+    
+    with login_col1:
+        st.markdown("##### 🔵 Partner Organization Login")
+        with st.form("org_login_form"):
+            input_org_token = st.text_input("Enter Private Organization Key Token:", type="password", help="Demo Keys: ORG-GL-001, ORG-REG-002, or ORG-ST-003").strip().upper()
+            submit_org = st.form_submit_button("Verify & Open Dossier Workspace")
+            
+            if submit_org and input_org_token:
+                if not df_orgs.empty and "Org_ID" in df_orgs.columns and input_org_token in df_orgs["Org_ID"].astype(str).str.upper().str.strip().values:
+                    st.session_state["access_role"] = "ORGANIZATION"
+                    st.session_state["user_token"] = input_org_token
+                    st.success(f" Handshake verified. Connected token: {input_org_token}. Scroll below to view workspace.")
+                else:
+                    st.error("❌ Invalid Organization Key Token.")
+                    
+    with login_col2:
+        st.markdown("##### 🔒 Registry Master Administration")
+        with st.form("admin_login_form"):
+            input_admin_pass = st.text_input("Enter Master Admin Passcode:", type="password", help="Demo Override Key: admin123")
+            submit_admin = st.form_submit_button("Verify & Open Root Command Console")
+            
+            if submit_admin and input_admin_pass:
+                if input_admin_pass == "admin123":
+                    st.session_state["access_role"] = "ADMIN"
+                    st.success("🔑 Root Access Verified. Global administrative structures initialized below.")
+                else:
+                    st.error("❌ Credentials unverified. Access Denied.")
+
+    # Contextual Sign-out Command Route Trigger
+    if "access_role" in st.session_state:
+        st.write("---")
+        if st.button("🔴 Securely Sign Out & Return to Open Public Lookup Mode"):
+            for key in ["access_role", "user_token"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
+
+st.write("---")
+
+
+# ==============================================================================
+# INTERACTIVE DYNAMIC VIEW COORDINATOR ENGINE
+# ==============================================================================
+current_view = st.session_state.get("access_role", "PUBLIC")
+
+# TIER 1: THE OPEN PUBLIC LOOK-UP ENVIRONMENT (DEFAULT BASELINE VIEW)
+if current_view == "PUBLIC":
+    st.subheader("🔍 Public Relief Directory Directory Lookup")
+    st.info("ℹ️ **Data Masking Active:** Public access is unrestricted. Sensitive map tracking features, coordinate layers, specific volunteer PII registries, and accounts pending verification are structurally blocked.")
+    
+    if not df_orgs.empty:
+        # Enforce lifecycle query constraint rule
+        active_pub_df = df_orgs[df_orgs["Lifecycle_Status"] == "VERIFIED_ACTIVE"]
+        
+        p_col1, p_col2 = st.columns(2)
+        with p_col1:
+            pub_state = st.selectbox("Search State Jurisdictions:", ["All States", "FL", "TX", "GA"])
+        with p_col2:
+            pub_tier = st.selectbox("Organizational Scale Classification:", ["All Scales", "Global / International", "Multi-State Regional", "State-Specific", "Hyper-Local County Unit"])
+            
+        if pub_state != "All States" and "State_Supported" in active_pub_df.columns:
+            active_pub_df = active_pub_df[active_pub_df["State_Supported"].astype(str).str.contains(pub_state, case=False) | active_pub_df["State_Supported"].astype(str).str.contains("Global", case=False)]
+        if pub_tier != "All Scales":
+            active_pub_df = active_pub_df[active_pub_df["Operational_Tier"] == pub_tier]
+            
+        public_safe_columns = ["Organization_Name", "Operational_Tier", "Primary_ESF_Focus", "State_Supported", "Counties_Covered", "Active_Volunteer_Count"]
+        clean_cols = [c for c in public_safe_columns if c in active_pub_df.columns]
+        
+        st.dataframe(active_pub_df[clean_cols], use_container_width=True, hide_index=True)
+
+# TIER 2: AUTHENTICATED PARTNER SELF-SERVICE DOSSIER WORKSPACE (3RD VIEW)
+elif current_view == "ORGANIZATION":
+    target_token = st.session_state.get("user_token", "")
+    org_profile = df_orgs[df_orgs["Org_ID"].astype(str).str.upper().str.strip() == target_token].iloc[0]
+    
+    st.subheader(f"🏢 Profile Dossier Workspace: {org_profile.get('Organization_Name')}")
+    st.markdown(f"**Lifecycle Account State:** `{org_profile.get('Lifecycle_Status')}` | **Scale Classification:** `{org_profile.get('Operational_Tier')}`")
+    
+    if org_profile.get('Lifecycle_Status') == "PENDING_REVIEW":
+        st.error("⏳ **Account Access Restricted:** Your registration request is currently processing through the Admin Vetting Gate. Interactive update tools, field metrics logs, and localized map footprint coordinate vectors are locked out until cleared.")
+    else:
+        st.success(f"🔓 Security Boundary Handshake Clear. Data container restricted strictly to **{target_token}** records.")
+        
+        d_form, d_map = st.columns(2)
+        with d_form:
+            st.markdown("### 📝 Manage Profile and Boundaries")
+            with st.form("dossier_main_screen_form"):
+                st.write(f"• **Current FEMA ESF Focus Matrix:** `{org_profile.get('Primary_ESF_Focus')}`")
+                st.text_input("Modify Operational Phone Link Line:", value="1-800-555-0199")
+                st.text_area("Adjust Operational Geographic Scope Boundaries:", value=str(org_profile.get('Counties_Covered')))
+                st.form_submit_button("Submit Staged Changes for Administrator Audit Review")
+                
+        with d_map:
+            st.markdown("### 🗺️ Your Isolated Pinned Footprint")
+            lat_col = next((c for c in df_orgs.columns if c.lower() in ["latitude", "lat"]), None)
+            lon_col = next((c for c in df_orgs.columns if c.lower() in ["longitude", "lon", "long"]), None)
+import streamlit as st
+import pandas as pd
+
 st.set_page_config(page_title="Emergency Registry - UI Review", layout="wide")
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Database Hub — Phase 1 UI Review Protocol")
