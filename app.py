@@ -15,17 +15,15 @@ SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
 
 @st.cache_data(ttl=5) # 5-second ultra-fast cache window for fluent map interactions
 def fetch_live_data(sheet_name):
-    # Fixed the string parameter reference bug on this line
-    gviz_url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    # This URL pattern converts your live Google sheet tabs into directly downloadable raw CSV streams
+    csv_url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     try:
-        df = pd.read_csv(gviz_url)
+        df = pd.read_csv(csv_url)
         df.columns = df.columns.str.strip() # Strip manual column header spacing variants
         return df
-    except Exception:
-        fallback_url = f"https://google.com{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
-        df = pd.read_csv(fallback_url)
-        df.columns = df.columns.str.strip()
-        return df
+    except Exception as e:
+        st.error(f"❌ Connection Error: Streamlit cannot connect to sheet tab '{sheet_name}'. Check sharing settings on your Google Sheet. Details: {e}")
+        st.stop()
 
 # Load tabs into server memory
 df_orgs = fetch_live_data("Organizations")
@@ -118,7 +116,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("📍 Interactive Draw & Filter Canvas")
-    st.caption("危害️ Use the shapes toolbar on the left of the map to draw custom box or shape regions. The system will filter automatically below.")
+    st.caption("🖱️ Use the shapes toolbar on the left of the map to draw custom box or shape regions. The system will filter automatically below.")
     
     # Initialize Folium container map
     m = folium.Map(location=center_coords, zoom_start=zoom_factor, tiles="CartoDB positron")
@@ -153,7 +151,7 @@ with col1:
     drawn_geojson = map_output.get("last_active_drawing")
     if drawn_geojson and "geometry" in drawn_geojson:
         geometry_type = drawn_geojson["geometry"]["type"]
-        coords = drawn_geojson["geometry"]["coordinates"][0]
+        coords = drawn_geojson["geometry"]["coordinates"][0] # Explicit polygon structural array unpack
         
         if geometry_type in ["Polygon", "Rectangle"]:
             lats = [c[1] for c in coords]
