@@ -9,7 +9,6 @@ st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Advanced Spatial Sandbox")
 
 # 🗄️ INTERNAL COLD-STORAGE DATA BACKUP ENGINE
-# Instantly runs your exact data matrix columns if the cloud server network hangs
 def load_backup_sandbox_data():
     backup_payload = {
         "Organization_Name": ["Florida Baptist Disaster Relief", "ITDRC", "Texas Response Network", "Georgia Feeding VOAD", "Sarasota Local CERT"],
@@ -29,13 +28,12 @@ url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Organizatio
 
 # Network Gateway Switch
 try:
-    df = pd.read_csv(url, timeout=3) # Timeout forces immediate fallback if network hangs
+    df = pd.read_csv(url, timeout=3)
     df.columns = df.columns.str.strip().str.replace(" ", "_")
     df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
     df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
     df = df.dropna(subset=["Latitude", "Longitude"])
 except Exception:
-    # Safely switches over to backup registers if URL domain resolution times out
     df = load_backup_sandbox_data()
 
 # 🌍 Sidebar Regional Filter
@@ -61,26 +59,33 @@ m = folium.Map(location=center, zoom_start=zoom, tiles="CartoDB positron")
 Draw(position='topleft', draw_options={'polyline':False, 'circle':False, 'marker':False, 'polygon':True, 'rectangle':True}).add_to(m)
 
 for idx, row in filtered_df.iterrows():
-    folium.CircleMarker(location=[row["Latitude"], row["Longitude"]], radius=6, color="#1f77b4", fill=True, fill_opacity=0.7, popup=f"<b>{row['Organization_Name']}</b>").add_to(m)
+    folium.CircleMarker(
+        location=[row["Latitude"], row["Longitude"]], 
+        radius=6, 
+        color="#1f77b4", 
+        fill=True, 
+        fill_opacity=0.7, 
+        popup=f"<b>{row['Organization_Name']}</b>"
+    ).add_to(m)
 
 map_out = st_folium(m, width=1400, height=450, key="canvas")
 
-# 🖱️ Mouse Bounding Box Processing (Bulletproof Structural Matrix Unpack)
+# 🖱️ MOUSE HANDLER: Fixed the nested loop index tracker here
 drawn = map_out.get("last_active_drawing")
-if drawn and "geometry" in drawn and drawn["geometry"]["coordinates"]:
+if drawn and "geometry" in drawn and "coordinates" in drawn["geometry"]:
     try:
-        raw_coords = drawn["geometry"]["coordinates"][0]
-        lats = [float(c[1]) for c in raw_coords]
-        lons = [float(c[0]) for c in raw_coords]
+        raw_coords = drawn["geometry"]["coordinates"][0] # Explicitly unpacks the nested Leaflet array structure
+        lons = [float(point[0]) for point in raw_coords]
+        lats = [float(point[1]) for point in raw_coords]
         
-        # Slices your spreadsheet rows dynamically inside the drawn perimeter shape
+        # Slices your sandbox rows dynamically inside your custom drawn boundary perimeter
         filtered_df = filtered_df[
             (filtered_df["Latitude"] >= min(lats)) & (filtered_df["Latitude"] <= max(lats)) & 
             (filtered_df["Longitude"] >= min(lons)) & (filtered_df["Longitude"] <= max(lons))
         ]
         st.sidebar.success("🎯 Map filtered by drawn boundaries!")
-    except Exception:
-        pass
+    except Exception as err:
+        st.sidebar.warning(f"Geometry tracker buffering... {err}")
 
 st.write("---")
 
@@ -97,7 +102,7 @@ with col1:
         if phone and phone != "nan":
             st.markdown(f'👉 <a href="tel:{phone.replace("-","")}" style="font-size:16px; font-weight:bold; color:#1f77b4; text-decoration:none;">📲 Click to Call: {phone}</a>', unsafe_allow_html=True)
     else:
-        st.write("No groups inside this layout scope.")
+        st.write("No groups inside this layout scope footprint.")
 
 with col2:
     st.subheader("📊 Operational Resource Metrics")
@@ -108,5 +113,3 @@ with col2:
 st.write("---")
 st.subheader("📊 Dynamic Data Records Pipeline Table")
 st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-
-# force container network flush
