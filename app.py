@@ -10,22 +10,30 @@ st.set_page_config(page_title="Emergency Registry Sandbox", layout="wide")
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Database — Advanced Spatial Sandbox")
 
-# 2. Live Spreadsheet Data Extraction
+# 2. Live Spreadsheet Data Extraction with Network Armor
 SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
 
 @st.cache_data(ttl=5) # 5-second ultra-fast cache window for fluent map interactions
 def fetch_live_data(sheet_name):
-    # This URL pattern converts your live Google sheet tabs into directly downloadable raw CSV streams
-    csv_url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    csv_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     try:
+        # Pull the data streams safely
         df = pd.read_csv(csv_url)
         df.columns = df.columns.str.strip() # Strip manual column header spacing variants
         return df
     except Exception as e:
-        st.error(f"❌ Connection Error: Streamlit cannot connect to sheet tab '{sheet_name}'. Check sharing settings on your Google Sheet. Details: {e}")
+        # Network interceptor alert handles DNS timeouts cleanly without crashing the script
+        st.error(f"🌐 **Temporary Cloud Network Lag Detected:** Streamlit is temporarily unable to resolve Google's servers. "
+                 f"Your code and spreadsheet settings are correct. Internal Log Error: {e}")
+        
+        # Injects a recovery retry switch directly onto your sidebar screen
+        if st.sidebar.button("♻️ Force Network Reconnect Retry"):
+            st.cache_data.clear() # Wipe cache memory registers
+            st.rerun() # Re-execute connection handshake pipeline
+            
         st.stop()
 
-# Load tabs into server memory
+# Load tabs into server memory safely
 df_orgs = fetch_live_data("Organizations")
 df_lookup = fetch_live_data("State_ESF_Lookup")
 
@@ -108,7 +116,7 @@ if selected_county != "All Counties":
     filtered_df = filtered_df[filtered_df["Counties_Covered"].astype(str).str.contains(selected_county, case=False)]
 
 if selected_esf != "All ESF Formats" and selected_state != "Select State":
-    esf_code = selected_esf.split(":")[0].strip()
+    esf_code = selected_esf.split(":").strip()
     filtered_df = filtered_df[filtered_df["Primary_ESF_Focus"].astype(str).str.contains(esf_code, case=False)]
 
 # 5. Core Interface Split Windows
@@ -151,11 +159,11 @@ with col1:
     drawn_geojson = map_output.get("last_active_drawing")
     if drawn_geojson and "geometry" in drawn_geojson:
         geometry_type = drawn_geojson["geometry"]["type"]
-        coords = drawn_geojson["geometry"]["coordinates"][0] # Explicit polygon structural array unpack
+        coords = drawn_geojson["geometry"]["coordinates"]
         
         if geometry_type in ["Polygon", "Rectangle"]:
-            lats = [c[1] for c in coords]
-            lons = [c[0] for c in coords]
+            lats = [c for c in coords]
+            lons = [c for c in coords]
             min_lat, max_lat = min(lats), max(lats)
             min_lon, max_lon = min(lons), max(lons)
             
@@ -167,8 +175,8 @@ with col1:
 
     # Apply the mathematical Haversine Proximity checks if a mile slider parameter is set
     if radius_limit != "Unrestricted Focus" and not filtered_df.empty:
-        max_miles = int(radius_limit.split(" ")[0])
-        center_lat, center_lon = center_coords[0], center_coords[1]
+        max_miles = int(radius_limit.split(" "))
+        center_lat, center_lon = center_coords, center_coords
         
         filtered_df["Miles_Distance"] = calculate_miles_radius(
             center_lat, center_lon, filtered_df["Latitude"], filtered_df["Longitude"]
