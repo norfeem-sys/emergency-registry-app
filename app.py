@@ -1,153 +1,199 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import Draw
 
-st.set_page_config(page_title="Emergency Registry - Setup Prototype", layout="wide")
+# 1. Page Configuration & Layout Rules
+st.set_page_config(page_title="Emergency Registry Sandbox", layout="wide")
+st.title("🗺️ National Volunteer & Organization Emergency Registry")
+st.caption("501(c)(3) Live Multi-State Disaster Response Database — Advanced Spatial Sandbox")
 
-# ==============================================================================
-# 🗃️ LIVE DATABASE PIPELINE INGESTION ENGINE
-# ==============================================================================
-# 🔴 HARDCODED WITH YOUR EXACT FULL GOOGLE SPREADSHEET URL
-FULL_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY/edit?usp=sharing"
+# 2. Live Spreadsheet Data Extraction
+SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
 
-@st.cache_data(ttl=10) # 10-second fast cache window for rapid deployment testing
-def load_live_data(sheet_name): 
-    # Dynamically converts the full browser share link into a multi-tab clean CSV stream 
-    base_url = FULL_SPREADSHEET_URL.split("/edit")[0] 
-    direct_export_url = f"{base_url}/export?format=csv&sheet={sheet_name}" 
-    df = pd.read_csv(direct_export_url) 
-    df.columns = df.columns.str.strip() # Defensive cleanup for column headers 
-    return df
+@st.cache_data(ttl=5) # 5-second ultra-fast cache window for fluent map interactions
+def fetch_live_data(sheet_name):
+    url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    try:
+        df = pd.read_csv(url)
+        df.columns = df.columns.str.strip() # Strip manual column header spacing variants
+        return df
+    except Exception:
+        fallback_url = f"https://google.com{SPREADSHEET_ID}/export?format=csv&sheet={sheet_name}"
+        df = pd.read_csv(fallback_url)
+        df.columns = df.columns.str.strip()
+        return df
 
-# Load separate tabs directly into memory by their literal text names
-try: 
-    df_orgs = load_live_data("Organizations") 
-    df_lookup = load_live_data("State_ESF_Lookup") 
-    df_vols = load_live_data("Volunteers")
-except Exception as e: 
-    st.error(f"❌ Connection Error: Google Sheet connection blocked. Please check that 'Anyone with the link can view' is turned on. Details: {e}") 
+# Load tabs into server memory
+df_orgs = fetch_live_data("Organizations")
+df_lookup = fetch_live_data("State_ESF_Lookup")
+
+if df_orgs.empty or df_lookup.empty:
+    st.warning("🔄 Connecting to cloud spreadsheets... Please ensure your Google Sheet sharing is public.")
     st.stop()
 
-# Sidebar Navigation Panel
-st.sidebar.header("Compass Dashboard Navigation")
-app_mode = st.sidebar.radio("Go to view:", ["Public Interactive Map", "🔒 Master Admin Reports"])
+# Auto-sanitize space and capitalization variations inside spreadsheet rows
+df_orgs.columns = df_orgs.columns.str.replace(" ", "_").str.replace("Name", "Name").str.replace("name", "Name")
+df_lookup.columns = df_lookup.columns.str.replace(" ", "_")
 
-# 🔄 STATE TRANSLATOR ENGINE
-def clean_state_value(val): 
-    text = str(val).strip().upper() 
-    if "FLORIDA" in text or text == "FL": return "FL" 
-    elif "TEXAS" in text or text == "TX": return "TX" 
-    elif "GEORGIA" in text or text == "GA": return "GA" 
-    elif "GLOBAL" in text: return "Global" 
-    elif "ALL" in text: return "All States" 
-    return text
+if "Primary_ESF" in df_orgs.columns and "Primary_ESF_Focus" not in df_orgs.columns:
+    df_orgs["Primary_ESF_Focus"] = df_orgs["Primary_ESF"]
 
-state_col = next((c for c in df_orgs.columns if 'state' in c.lower()), None)
-if state_col: 
-    df_orgs["State_Supported_Clean"] = df_orgs[state_col].apply(clean_state_value)
-else: 
-    df_orgs["State_Supported_Clean"] = "FL"
+# Force coordinate data to numeric types to shield from text-entry pipeline crashes
+df_orgs["Latitude"] = pd.to_numeric(df_orgs["Latitude"], errors="coerce")
+df_orgs["Longitude"] = pd.to_numeric(df_orgs["Longitude"], errors="coerce")
+df_vetted_gps = df_orgs.dropna(subset=["Latitude", "Longitude"]).copy()
 
-# 📊 DATA LINKING ENGINE: Match Volunteers to Organizations
-if 'Associated_Org_ID' in df_vols.columns and 'Org_ID' in df_orgs.columns: 
-    active_statuses = ["AVAILABLE", "DEPLOYED", "STANDBY"] 
-    active_vols = df_vols[df_vols["Availability_Status"].astype(str).str.upper().str.strip().isin(active_statuses)] 
-    vol_counts = active_vols["Associated_Org_ID"].value_counts().to_dict() 
-    df_orgs["Active_Volunteer_Count"] = df_orgs["Org_ID"].map(vol_counts).fillna(0).astype(int)
-else: 
-    df_orgs["Active_Volunteer_Count"] = 0
+# 3. Vectorized Haversine Proximity Logic (Miles Calculator)
+def calculate_miles_radius(lat1, lon1, lat2, lon2):
+    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = np.sin(dlat/2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2.0)**2
+    c = 2 * np.arcsin(np.sqrt(a))
+    return 3956 * c # 3956 represents Earth radius in Miles
 
-if app_mode == "Public Interactive Map": 
-    st.sidebar.subheader("🌍 Regional Map Filters") 
-    filter_mode = st.sidebar.radio("Display Priority:", ["Only Show Orgs with Active Volunteers", "Show All Registered Agencies"]) 
-    selected_state = st.sidebar.selectbox("1. Select Target State:", ["All States", "FL", "TX", "GA"]) 
+# 4. Interactive Configuration Sidebar Panels
+st.sidebar.header("🌍 Dynamic Spatial Parameters")
+
+state_options = ["Select State"] + sorted(df_vetted_gps["State_Supported"].dropna().unique().tolist())
+selected_state = st.sidebar.selectbox("1. Target State Base:", state_options)
+
+# Isolate cascading filter data pools
+state_filtered_df = df_vetted_gps.copy()
+available_esfs = ["All ESF Formats"]
+available_counties = ["All Counties"]
+center_coords = [37.0902, -95.7129]
+zoom_factor = 4
+
+if selected_state != "Select State":
+    state_filtered_df = df_vetted_gps[df_vetted_gps["State_Supported"].str.upper() == selected_state.upper()]
     
-    if selected_state == "All States": 
-        state_filtered_df = df_orgs.copy() 
-    else: 
-        state_filtered_df = df_orgs[(df_orgs["State_Supported_Clean"] == selected_state) | (df_orgs["State_Supported_Clean"] == "All States") | (df_orgs["State_Supported_Clean"] == "Global")] 
+    # Intelligently adapt base coordinates depending on the chosen state zoom window
+    if not state_filtered_df.empty:
+        center_coords = [state_filtered_df["Latitude"].mean(), state_filtered_df["Longitude"].mean()]
+        zoom_factor = 6
         
-    if filter_mode == "Only Show Orgs with Active Volunteers": 
-        state_filtered_df = state_filtered_df[state_filtered_df["Active_Volunteer_Count"] > 0] 
-        
-    county_col = next((c for c in df_orgs.columns if 'county' in c.lower() or 'counties' in c.lower()), None) 
-    unique_counties = ["All Counties"] 
-    if county_col and not state_filtered_df.empty: 
-        raw_counties = state_filtered_df[county_col].dropna().astype(str).tolist() 
-        for item in raw_counties: 
-            for sub_item in item.split(","): 
-                cleaned_item = sub_item.strip() 
-                if cleaned_item and cleaned_item.upper() != "ALL COUNTIES" and cleaned_item not in unique_counties: 
-                    unique_counties.append(cleaned_item) 
-                    
-    selected_county = st.sidebar.selectbox("2. Narrow Down by County Scope:", sorted(unique_counties)) 
-    if selected_county == "All Counties": 
-        filtered_df = state_filtered_df.copy() 
-    else: 
-        filtered_df = state_filtered_df[ 
-            state_filtered_df[county_col].astype(str).str.contains(selected_county, case=False) | 
-            state_filtered_df[county_col].astype(str).str.contains("All Counties", case=False) 
-        ] 
-        
-    # 🌍 GEOSPATIAL VISUAL MAPPING BLOCK 
-    st.markdown(f"### 📍 Active Logistics Map Representation") 
-    lat_col = next((c for c in df_orgs.columns if c.lower() in ["latitude", "lat"]), None) 
-    lon_col = next((c for c in df_orgs.columns if c.lower() in ["longitude", "lon", "long"]), None) 
-    
-    if lat_col and lon_col: 
-        map_df = filtered_df.copy() 
-        map_df[lat_col] = pd.to_numeric(map_df[lat_col], errors='coerce') 
-        map_df[lon_col] = pd.to_numeric(map_df[lon_col], errors='coerce') 
-        map_ready = map_df.dropna(subset=[lat_col, lon_col]) 
-        if not map_ready.empty: 
-            map_render = map_ready.rename(columns={lat_col: 'latitude', lon_col: 'longitude'}) 
-            st.map(map_render[['latitude', 'longitude']], size=25) 
-        else: 
-            fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 30.3322], 'longitude': [-81.3792, -82.5307, -81.6557]}) 
-            st.map(fallback_us_coords, zoom=4) 
-    else: 
-        fallback_us_coords = pd.DataFrame({'latitude': [28.5383, 27.3364, 30.3322], 'longitude': [-81.3792, -82.5307, -81.6557]}) 
-        st.map(fallback_us_coords, zoom=4) 
-        
-    st.write("---") 
-    
-    # 📊 DYNAMIC DATAFRAME RENDER ENGINE 
-    st.markdown(f"#### 📋 Spreadsheet Data Records ({selected_county} Scope View)") 
-    cols_to_show = ["Organization_Name", "Active_Volunteer_Count", "Primary_ESF_Focus", "State_Supported_Clean"] 
-    display_df = filtered_df[[c for c in cols_to_show if c in filtered_df.columns] + [c for c in filtered_df.columns if c not in cols_to_show]] 
-    st.dataframe(display_df, use_container_width=True, hide_index=True) 
-    st.write("---") 
-    
-    # 🔍 DETAILED COMPANY DOSSIER EXPANSION SECTION 
-    col1, col2 = st.columns(2) 
-    with col1: 
-        org_list = filtered_df["Organization_Name"].dropna().tolist() if "Organization_Name" in filtered_df.columns else [] 
-        selected_org = st.selectbox("Select an organization to expand live details:", org_list) 
-    with col2: 
-        if selected_org and not filtered_df.empty: 
-            org_rows = filtered_df[filtered_df["Organization_Name"] == selected_org] 
-            if not org_rows.empty: 
-                org_row = org_rows.iloc[0] 
-                st.markdown(f"#### 🏢 {org_row.get('Organization_Name', selected_org)}") 
-                st.warning(f"👥 **Live Personnel Available right now:** {org_row.get('Active_Volunteer_Count', 0)} active volunteers managed.") 
-                
-                for key, val in org_row.items(): 
-                    if str(val) != 'nan' and key not in ['Organization_Name', 'Latitude', 'Longitude', 'State_Supported_Clean', 'Active_Volunteer_Count']: 
-                        st.write(f"• **{key.replace('_',' ')}**: {val}") 
-                        
-                phone_key = next((k for k in org_row.index if 'phone' in k.lower() or 'contact' in k.lower()), None) 
-                if phone_key and str(org_row[phone_key]) != 'nan': 
-                    raw_phone = str(org_row[phone_key]) 
-                    phone_url = f"tel:{raw_phone.replace('-', '').replace(' ', '').replace('+', '')}" 
-                    st.markdown(f'👉 <a href="{phone_url}" style="font-size:18px; font-weight:bold; color:#1f77b4; text-decoration:none;">📲 Click to Call: {raw_phone}</a>', unsafe_allow_html=True)
+    # Extract structural counties covered natively in this region
+    if "Counties_Covered" in state_filtered_df.columns:
+        for val in state_filtered_df["Counties_Covered"].dropna().astype(str):
+            for county in val.split(","):
+                c_clean = county.strip()
+                if c_clean and c_clean.upper() != "ALL COUNTIES" and c_clean not in available_counties:
+                    available_counties.append(c_clean)
 
-elif app_mode == "🔒 Master Admin Reports": 
-    st.subheader("📊 Administrative System Integrity Analytics") 
-    c1, c2, c3 = st.columns(3) 
-    c1.metric("Total Agencies Registered", len(df_orgs)) 
+    # 🔄 DYNAMIC FORMAT SHIFTER: Adapts ESF drop-downs directly to chosen state laws
+    state_specific_lookup = df_lookup[df_lookup["Jurisdiction"].str.upper() == selected_state.upper()]
+    if not state_specific_lookup.empty:
+        available_esfs = ["All ESF Formats"] + (state_specific_lookup["Local_ESF_Number"] + ": " + state_specific_lookup["Local_Official_Title"]).tolist()
+    else:
+        available_esfs = ["All ESF Formats"] + sorted(state_filtered_df["Primary_ESF_Focus"].dropna().unique().tolist())
+
+# Render context drop-downs
+selected_county = st.sidebar.selectbox("2. Narrow Down by County Scope:", available_counties)
+selected_esf = st.sidebar.selectbox("3. State-Specific ESF Framework Filter:", available_esfs)
+
+# Filter 4: Miles Radius Selection
+st.sidebar.markdown("---")
+st.sidebar.subheader("📐 Logistical Range Slider")
+radius_limit = st.sidebar.select_slider(
+    "Asset Deployment Proximity:",
+    options=["Unrestricted Focus", "50 Miles", "100 Miles", "150 Miles", "200 Miles"]
+)
+
+# Apply context-based filters
+filtered_df = state_filtered_df.copy()
+if selected_county != "All Counties":
+    filtered_df = filtered_df[filtered_df["Counties_Covered"].astype(str).str.contains(selected_county, case=False)]
+
+if selected_esf != "All ESF Formats" and selected_state != "Select State":
+    esf_code = selected_esf.split(":")[0].strip()
+    filtered_df = filtered_df[filtered_df["Primary_ESF_Focus"].astype(str).str.contains(esf_code, case=False)]
+
+# 5. Core Interface Split Windows
+col1, col2 = st.columns([5, 3])
+
+with col1:
+    st.subheader("📍 Interactive Draw & Filter Canvas")
+    st.caption("🖱️ Use the shapes toolbar on the left of the map to draw custom box or shape regions. The system will filter automatically below.")
     
-    v_col = next((c for c in df_orgs.columns if 'verify' in c.lower()), None) 
-    unverified_count = len(df_orgs[df_orgs[v_col].astype(str).str.upper().str.strip() == "FALSE"]) if v_col else 0
-    c2.metric("Unverified Agencies", unverified_count)
+    # Initialize Folium container map
+    m = folium.Map(location=center_coords, zoom_start=zoom_factor, tiles="CartoDB positron")
     
-    if "Active_Volunteer_Count" in df_orgs.columns:
-        c3.metric("Total Standby Volunteers", int(df_orgs["Active_Volunteer_Count"].sum()))
+    # Inject the Leaflet Draw plugin module to accept mouse interaction bounding boxes
+    Draw(
+        export=False,
+        filename='drawn_regions.geojson',
+        position='topleft',
+        draw_options={
+            'polyline': False, 'circle': False, 'marker': False, 
+            'circlemarker': False, 'polygon': True, 'rectangle': True
+        }
+    ).add_to(m)
+    
+    # Map dots plotting loop 
+    for idx, row in filtered_df.iterrows():
+        folium.CircleMarker(
+            location=[row["Latitude"], row["Longitude"]],
+            radius=6,
+            color="#1f77b4",
+            fill=True,
+            fill_color="#1f77b4",
+            fill_opacity=0.7,
+            popup=f"<b>{row['Organization_Name']}</b><br>{row['Primary_ESF_Focus']}"
+        ).add_to(m)
+        
+    # Bind map to Streamlit framework layout context
+    map_output = st_folium(m, width="100%", height=550, key="folium_canvas")
+
+    # 🖱️ MOUSE HANDLER: Extract coordinates if user draws a region on the canvas
+    drawn_geojson = map_output.get("last_active_drawing")
+    if drawn_geojson and "geometry" in drawn_geojson:
+        geometry_type = drawn_geojson["geometry"]["type"]
+        coords = drawn_geojson["geometry"]["coordinates"][0]
+        
+        if geometry_type in ["Polygon", "Rectangle"]:
+            lats = [c[1] for c in coords]
+            lons = [c[0] for c in coords]
+            min_lat, max_lat = min(lats), max(lats)
+            min_lon, max_lon = min(lons), max(lons)
+            
+            # Apply geometric bounding box data slicing dynamically 
+            filtered_df = filtered_df[
+                (filtered_df["Latitude"] >= min_lat) & (filtered_df["Latitude"] <= max_lat) &
+                (filtered_df["Longitude"] >= min_lon) & (filtered_df["Longitude"] <= max_lon)
+            ]
+            st.success(f"🎯 Map refreshed! Displaying organizations strictly inside drawn mouse bounding track.")
+
+    # Apply the mathematical Haversine Proximity checks if a mile slider parameter is set
+    if radius_limit != "Unrestricted Focus" and not filtered_df.empty:
+        max_miles = int(radius_limit.split(" ")[0])
+        center_lat, center_lon = center_coords[0], center_coords[1]
+        
+        filtered_df["Miles_Distance"] = calculate_miles_radius(
+            center_lat, center_lon, filtered_df["Latitude"], filtered_df["Longitude"]
+        )
+        filtered_df = filtered_df[filtered_df["Miles_Distance"] <= max_miles]
+
+with col2:
+    st.subheader("🏢 Expanded Asset Log")
+    if not filtered_df.empty:
+        selected_name = st.selectbox("Inspect profile metrics:", filtered_df["Organization_Name"].dropna().tolist())
+        if selected_name:
+            profile = filtered_df[filtered_df["Organization_Name"] == selected_name].iloc[0]
+            st.markdown(f"### **{profile['Organization_Name']}**")
+            st.markdown(f"**Jurisdiction Reach:** `{profile.get('Operation_Scope','Statewide')}`")
+            st.info(f"💪 **Logistical Capacity:**\n{profile.get('Resource_Capacity','No resource notes found.')}")
+            
+            # Click to Call Protocol Configuration
+            phone = str(profile.get("Phone", ""))
+            if phone and phone != "nan":
+                st.markdown(f'👉 <a href="tel:{phone.replace("-","")}" style="font-size:18px; font-weight:bold; color:#1f77b4; text-decoration:none;">📲 Click to Call: {phone}</a>', unsafe_allow_html=True)
+    else:
+        st.write("No registered entities found within this localized scope matrix.")
+
+st.write("---")
+st.subheader("📊 Dynamic Data Records Pipeline Table")
+st.dataframe(filtered_df, use_container_width=True, hide_index=True)
