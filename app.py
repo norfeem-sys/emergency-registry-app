@@ -203,16 +203,16 @@ st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 # DOCUMENTATION SECTION ANCHORS
 # ==============================================================================
 st.write("---")
-st.markdown("<div id='about'></div>", unsafe_url_allowed=True)
+st.markdown("<div id='about'></div>", unsafe_allow_html=True)
 with st.expander("ℹ️ About the Registry Platform", expanded=True):
     st.write("This sandbox registry empowers multi-state disaster routing by bridging organization rosters and regional ESF frameworks together seamlessly during major dynamic emergency events.")
 
-st.markdown("<div id='instructions'></div>", unsafe_url_allowed=True)
+st.markdown("<div id='instructions'></div>", unsafe_allow_html=True)
 with st.expander("📖 System Operational Instructions"):
     st.write("1. Choose your active disaster framework using the cascading sidebar dropdown filters.")
     st.write("2. Select or draw geographic bounding layers directly on the map block.")
     st.write("3. Inspect the Dossier panel for exact regional contact routing information.")
 
-st.markdown("<div id='contributors'></div>", unsafe_url_allowed=True)
+st.markdown("<div id='contributors'></div>", unsafe_allow_html=True)
 with st.expander("🤝 Open-Source Contributors & Attribution"):
     st.write("Built on Folium, Leaflet, Streamlit, and community OpenStreetMap spatial architecture data. Continuous maintenance by the Emergency Infrastructure Developer Core Team.")
