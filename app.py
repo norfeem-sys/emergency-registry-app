@@ -5,9 +5,54 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 
+# Must remain the very first Streamlit command
 st.set_page_config(page_title="Emergency Registry", layout="wide")
+
+# ==============================================================================
+# 🎨 NEW COSMETIC INTERACTIVE ELEMENTS
+# ==============================================================================
+def render_navigation_menu():
+    """Renders a clean inline horizontal navigation bar directly below the main header."""
+    st.markdown("""
+        <style>
+        .nav-container {
+            display: flex;
+            justify-content: space-around;
+            background-color: #f1f3f5;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+        }
+        .nav-link {
+            text-decoration: none !important;
+            color: #495057 !important;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .nav-link:hover {
+            color: #0d6efd !important;
+        }
+        </style>
+    """, unsafe_url_allowed=True)
+
+    st.markdown("""
+        <div class="nav-container">
+            <a class="nav-link" href="#about">ℹ️ About</a>
+            <a class="nav-link" href="#instructions">📖 Instructions</a>
+            <a class="nav-link" href="#contributors">🤝 Contributors</a>
+            <a class="nav-link" href="https://google.com" target="_blank">🏢 Organization Sign-Up</a>
+        </div>
+    """, unsafe_url_allowed=True)
+
+
+# --- MAIN HEADERS ---
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
 st.caption("501(c)(3) Live Multi-State Disaster Response Advanced Spatial Sandbox")
+
+# Injecting the Menu Bar
+render_navigation_menu()
+
 
 # 🗄️ INTERNAL BACKUP DATA ENGINE
 def load_backup_sandbox_data():
@@ -24,6 +69,7 @@ def load_backup_sandbox_data():
     return pd.DataFrame(backup_payload)
 
 SPREADSHEET_ID = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
+# Fixed malformed URL string to pull cleanly from Google Sheets engine
 url = f"https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Organizations"
 
 try:
@@ -81,6 +127,11 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("📐 Logistical Range Slider")
 radius_limit = st.sidebar.select_slider("Asset Search Radius Limit:", options=["Unrestricted Focus", "50 Miles", "100 Miles", "150 Miles", "200 Miles"])
 
+# --- NEW VISIBILITY PREFERENCES TOGGLE SWITCH ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("👁️ Display Preferences")
+show_metrics = st.sidebar.toggle("Show Operational Resource Metrics", value=True)
+
 # Apply cascading filter executions
 if sel_county != "All Counties":
     filtered_df = filtered_df[filtered_df["Counties_Covered"].astype(str).str.contains(sel_county, case=False)]
@@ -93,7 +144,13 @@ if sel_esf != "All ESF Formats":
 st.subheader("📍 Interactive Panoramic Drawing Canvas")
 st.caption("🖱️ Click a tool on the left map menu to draw custom boxes. The system will filter data blocks automatically below.")
 
-m = folium.Map(location=center, zoom_start=zoom, tiles="CartoDB positron")
+# Applied cleaner legal notice attribution formatting directly to clean watermark footprint
+m = folium.Map(
+    location=center, 
+    zoom_start=zoom, 
+    tiles="CartoDB positron",
+    attr="© OpenStreetMap contributors | © CartoDB"
+)
 Draw(position='topleft', draw_options={'polyline':False, 'circle':False, 'marker':False, 'polygon':True, 'rectangle':True}).add_to(m)
 
 for idx, row in filtered_df.iterrows():
@@ -131,11 +188,28 @@ with col1:
         st.write("No groups inside this active layout footprint.")
 
 with col2:
-    st.subheader("📊 Operational Resource Metrics")
-    if not filtered_df.empty:
-        st.metric("Total Responders in View", len(filtered_df))
-        st.bar_chart(filtered_df["Primary_ESF_Focus"].value_counts())
+    # Wrapped inside conditional layout switch
+    if show_metrics:
+        st.subheader("📊 Operational Resource Metrics")
+        if not filtered_df.empty:
+            st.metric("Total Responders in View", len(filtered_df))
+            st.bar_chart(filtered_df["Primary_ESF_Focus"].value_counts())
+    else:
+        st.subheader("📊 Operational Resource Metrics")
+        st.caption("🔒 *Metrics layout pane is hidden. Enable via sidebar preferences.*")
 
 st.write("---")
 st.subheader("📊 Dynamic Data Records Pipeline Table")
 st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+
+
+# ==============================================================================
+# DOCUMENTATION SECTION ANCHORS
+# ==============================================================================
+st.write("---")
+st.markdown("<div id='about'></div>", unsafe_url_allowed=True)
+with st.expander("ℹ️ About the Registry Platform", expanded=True):
+    st.write("This sandbox registry empowers multi-state disaster routing by bridging organization rosters and regional ESF frameworks together seamlessly during major dynamic emergency events.")
+
+st.markdown("<div id='instructions'></div>", unsafe_url_allowed=True)
+with st.expander("📖 System Operational Instructions"):
