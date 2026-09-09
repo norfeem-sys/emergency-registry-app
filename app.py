@@ -8,9 +8,7 @@ from folium.plugins import Draw
 # Must remain the very first Streamlit command
 st.set_page_config(page_title="Emergency Registry", layout="wide")
 
-# ==============================================================================
-# 🎨 NEW COSMETIC INTERACTIVE ELEMENTS
-# ==============================================================================
+
 def render_navigation_menu():
     """Renders a clean inline horizontal navigation bar directly below the main header."""
     st.markdown("""
@@ -34,7 +32,7 @@ def render_navigation_menu():
             color: #0d6efd !important;
         }
         </style>
-    """, unsafe_url_allowed=True)
+    """, unsafe_allow_html=True) # <-- FIXED PARAMETER
 
     st.markdown("""
         <div class="nav-container">
@@ -43,8 +41,7 @@ def render_navigation_menu():
             <a class="nav-link" href="#contributors">🤝 Contributors</a>
             <a class="nav-link" href="https://google.com" target="_blank">🏢 Organization Sign-Up</a>
         </div>
-    """, unsafe_url_allowed=True)
-
+    """, unsafe_allow_html=True) # <-- FIXED PARAMETER
 
 # --- MAIN HEADERS ---
 st.title("🗺️ National Volunteer & Organization Emergency Registry")
