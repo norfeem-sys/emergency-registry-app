@@ -172,15 +172,26 @@ st.write("---")
 # 📊 LOWER GRID LAYOUT
 col1, col2 = st.columns(2)
 with col1:
-    st.subheader("🏢 Expanded Asset Logs")
+    st.subheader("🏢 Expanded Asset Logs & Dossier")
     if not filtered_df.empty:
         chosen = st.selectbox("Inspect profile metrics:", filtered_df["Organization_Name"].tolist())
+        
+        # FIXED: Added [0] so Streamlit can read the organization details correctly
         rec = filtered_df[filtered_df["Organization_Name"] == chosen].iloc[0]
-        st.markdown(f"### **{rec['Organization_Name']}**")
-        st.info(f"💪 **Capacity:** {rec.get('Resource_Capacity', 'No description logged.')}")
+        
+        st.markdown(f"### 📋 {rec['Organization_Name']}")
+        
+        # Displays all individual organization columns cleanly
+        st.markdown(f"**📍 Jurisdiction Alignment:** `{rec.get('State_Supported', 'N/A')}`")
+        st.markdown(f"**⚡ Primary Response Role:** `{rec.get('Primary_ESF_Focus', 'N/A')}`")
+        st.markdown(f"**🗺️ Local Coverage Area:** *{rec.get('Counties_Covered', 'N/A')}*")
+        
+        st.info(f"💪 **Operational Capacity & Fleet:**\n\n{rec.get('Resource_Capacity', 'No description logged.')}")
+        
+        # Direct phone connection hotlink
         phone = str(rec.get("Phone", ""))
         if phone and phone != "nan":
-            st.markdown(f'👉 <a href="tel:{phone.replace("-","")}" style="font-size:16px; font-weight:bold; color:#1f77b4; text-decoration:none;">📲 Click to Call: {phone}</a>', unsafe_allow_html=True)
+            st.markdown(f'👉 <a href="tel:{phone.replace("-","")}" style="font-size:16px; font-weight:bold; color:#1f77b4; text-decoration:none;">📲 Click to Call Emergency Line: {phone}</a>', unsafe_allow_html=True)
     else:
         st.write("No groups inside this active layout footprint.")
 
@@ -196,6 +207,8 @@ with col2:
         st.caption("🔒 *Metrics layout pane is hidden. Enable via sidebar preferences.*")
 
 st.write("---")
+
+
 st.subheader("📊 Dynamic Data Records Pipeline Table")
 st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 
