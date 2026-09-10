@@ -21,7 +21,7 @@ st.caption("Official Compliance Intake Form for Disaster Response Providers")
 st.markdown("---")
 
 # ==============================================================================
-# 🗺️ STEP 1: INTERACTIVE JURISDICTION MATRIX LAYER (PULLED OUTSIDE FORM TO ENABLE RE-RUNS)
+# 🗺️ STEP 1: INTERACTIVE JURISDICTION MATRIX LAYER
 # ==============================================================================
 st.subheader("🗺️ Operational Footprint Scope")
 
@@ -43,10 +43,10 @@ county_database = {
         "Pinellas", "Polk", "Putnam", "Santa Rosa", "Sarasota", "Seminole", "St. Johns", "St. Lucie", "Sumter", "Suwannee", 
         "Taylor", "Union", "Volusia", "Wakulla", "Walton", "Washington"
     ],
-    "GA": ["Fulton", "Gwinnett", "Cobb", "DeKalb", "Chatham", "Cherokee", "Forsyth", "Richmond", "Muscogee", "Bibb"],
-    "TX": ["Harris", "Dallas", "Tarrant", "Bexar", "Travis", "Collin", "Hidalgo", "El Paso", "Denton", "Fort Bend"],
-    "NC": ["Wake", "Mecklenburg", "Guilford", "Forsyth", "Cumberland", "Durham", "Buncombe", "New Hanover", "Union"],
-    "SC": ["Greenville", "Richland", "Charleston", "Horry", "Spartanburg", "Lexington", "York", "Berkeley", "Anderson"]
+    "GA": ["Chatham", "Cherokee", "Bibb", "Cobb", "DeKalb", "Forsyth", "Fulton", "Gwinnett", "Muscogee", "Richmond"],
+    "TX": ["Bexar", "Collin", "Dallas", "Denton", "El Paso", "Fort Bend", "Harris", "Hidalgo", "Tarrant", "Travis"],
+    "NC": ["Buncombe", "Cumberland", "Durham", "Forsyth", "Guilford", "Mecklenburg", "New Hanover", "Union", "Wake"],
+    "SC": ["Anderson", "Berkeley", "Charleston", "Greenville", "Horry", "Lexington", "Richland", "Spartanburg", "York"]
 }
 
 # Aggregate valid choices dynamically based on the selected states
@@ -69,7 +69,7 @@ elif len(state_footprint) == 0:
     st.caption("🔒 *Awaiting state selection above to unlock local county choices...*")
     selected_counties = []
 else:
-    # County picker drops down instantly the second a state is clicked!
+    # County picker drops down instantly the second a state is clicked
     selected_counties = st.multiselect(
         "2. Select Covered Counties (Leave empty for 'All Counties'):",
         options=["Select All Counties"] + combined_county_options
@@ -84,7 +84,7 @@ with st.form("org_reg_form", clear_on_submit=True):
     
     st.subheader("🏢 Corporate Profile & Identification")
     org_name = st.text_input("Organization Legal Name / DBA:*", placeholder="e.g., Volunteer Response Force")
-    fein_num = st.text_input("9-Digit Federal Employer Identification Number (FEIN):*", max_chars=10, placeholder="XX-XXXXXXX")
+    fein_num = st.text_input("9-Digit Federal Employer Identification Number (FEIN):*", placeholder="XX-XXXXXXX")
     primary_phone = st.text_input("Primary Dispatch Hotline / Crisis Contact Phone:*", placeholder="1-800-555-0100")
     
     op_scope = st.selectbox("Operational Footprint Tier:*", ["National", "Statewide", "Local / Mutual Aid"])
@@ -113,6 +113,7 @@ with st.form("org_reg_form", clear_on_submit=True):
     submit_btn = st.form_submit_button("Submit Registry Records to Compliance Queue")
     
     if submit_btn:
+        # 🟢 SIMPLIFIED STRING VERIFICATION TO GUARANTEE PIPELINE WRITE EXECUTION
         if org_name and fein_num and primary_phone and resource_inventory and state_footprint:
             if compliance_check:
                 new_id = generate_org_id()
