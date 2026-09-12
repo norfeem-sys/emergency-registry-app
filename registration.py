@@ -127,19 +127,28 @@ with st.form("org_reg_form", clear_on_submit=True):
                     counties_string = ", ".join(selected_counties)
                 
                 # Constructing the exact data frame matching your 18-field tracking layout
-                new_row = pd.DataFrame([{
-                    "Org_ID": new_id,
-                    "Organization_Name": org_name,
-                    "FEIN": fein_num,
-                    "Operation_Scope": op_scope,
-                    "State_Supported": states_string,
-                    "Counties_Covered": counties_string,
-                    "Primary_Phone": primary_phone,
-                    "Primary_ESF": primary_esf,
-                    "Secondary_ESFs": secondary_esfs,
-                    "Resource_Inventory": resource_inventory,
-                    "Org_Logo_URL": logo_url,
-                    "Tax_Exempt_Doc_URL": doc_url,
+                               # Google Sheets Write Pipeline
+                try:
+                    if conn:
+                        # 🚨 FORCE CACHE REFRESH: Pulls the absolute latest records
+                        existing_data = conn.read(worksheet="Organizations", ttl=0)
+                        
+                        # Append the newly structured organization row
+                        updated_data = pd.concat([existing_data, new_row], ignore_index=True)
+                        
+                        # Overwrite the spreadsheet with the updated matrix
+                        conn.update(worksheet="Organizations", data=updated_data)
+                        
+                        st.success("💾 Staged corporate records securely appended to live Google Sheet database!")
+                        st.balloons()
+                    else:
+                        st.warning("⚠ Sandbox Offline Mode: Data processed locally but cloud secrets are missing.")
+                except Exception as e:
+                    st.error(f"❌ Spreadsheet Write Failure: {e}")
+                
+                st.markdown(f"### 🔑 Tracking Identification Key: `{new_id}`")
+                st.info("💡 Save this key. It is required to modify or archive your assets post-demo.")
+
                     "Account_Status": "Active",
                     "Data_Verified": "Pending",
                     "Verification_Time": "N/A",
