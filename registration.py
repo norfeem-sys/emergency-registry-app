@@ -16,6 +16,8 @@ def generate_org_id():
 # 🔄 Initialize session state keys for clear/reset operations if not already set
 if "form_submit_success" not in st.session_state:
     st.session_state.form_submit_success = False
+if "last_submitted_id" not in st.session_state:
+    st.session_state.last_submitted_id = ""
 
 st.set_page_config(page_title="Organization Registration Portal", layout="centered")
 
@@ -83,7 +85,8 @@ st.markdown("---")
 # ==============================================================================
 # 📝 STEP 2: STABLE COMPLIANCE INTAKE FORM CONTAINER
 # ==============================================================================
-with st.form("org_reg_form", clear_on_submit=True):
+# 💡 IMPORTANT: We remove clear_on_submit=True because we manage form fields via session_state keys manually!
+with st.form("org_reg_form", clear_on_submit=False):
     
     st.subheader("🏢 Corporate Profile & Identification")
     org_name = st.text_input("Organization Legal Name / DBA:*", placeholder="e.g., Volunteer Response Force", key="org_name_val")
@@ -129,7 +132,7 @@ with st.form("org_reg_form", clear_on_submit=True):
                 else:
                     counties_string = ", ".join(selected_counties)
                 
-                # 🚨 CRITICAL FIX: Schema matched exactly to your live spreadsheet columns
+                # 🚨 SCHEMA ALIGNED EXACTLY TO LIVE SPREADSHEET HEADERS
                 new_row = pd.DataFrame([{
                     "Org_ID": new_id,
                     "Organization_Name": org_name,
@@ -152,36 +155,37 @@ with st.form("org_reg_form", clear_on_submit=True):
                 
                 # Google Sheets Write Pipeline
                 try:
-                    if conn:
-                        # 🚨 FORCE CACHE REFRESH: Pulls the absolute latest records
-                        # Double-check your Google Sheets tab name! Change "Organizations" below if your tab is named "Sheet1"
+                    if conn is not None:
+                        # Force real-time query pull ignoring cache layers
                         existing_data = conn.read(worksheet="Organizations", ttl=0)
                         
-                        # Append the newly structured organization row
-                        updated_data = pd.concat([existing_data, new_row], ignore_index=True)
+                        # Fallback calculation safety check if sheet is empty or missing headers
+                        if existing_data is None or existing_data.empty:
+                            updated_data = new_row
+                        else:
+                            updated_data = pd.concat([existing_data, new_row], ignore_index=True)
                         
-                        # Overwrite the spreadsheet with the updated matrix
+                        # Commit update matrix to online sheets instantly
                         conn.update(worksheet="Organizations", data=updated_data)
                         
-                        # Track execution variables inside temporary storage keys to pass past rerun context
+                        # Store context properties securely prior to app state rerun pipeline clearance
                         st.session_state.last_submitted_id = new_id
                         st.session_state.form_submit_success = True
                         
-                        # 🔄 FLUSH FORM: Clear all bound fields out of session state memory instantly
+                        # 🔄 FLUSH FORM SPECIFIC ENTRIES ONLY WITHOUT REMOVING REGISTRY NOTIFICATION TRACKING KEYS
                         for key in list(st.session_state.keys()):
                             if key.endswith("_val"):
                                 del st.session_state[key]
                         
-                        # Force instant application layout visual refresh
                         st.rerun()
                     else:
-                        st.warning("⚠ Sandbox Offline Mode: Data processed locally but cloud secrets are missing.")
+                        st.error("❌ Database Failure: The 'gsheets' connection engine is not initialized. Please verify your secrets configuration matrix.")
                 except Exception as e:
-                    st.error(f"❌ Spreadsheet Write Failure: {e}")
+                    st.error(f"❌ Spreadsheet Write Failure: {str(e)}")
             else:
-                st.error("❌ You must check the compliance verification box to complete your entry.")
+                st.error("❌ Verification Requirement Halted: You must check the compliance capacity certification checkbox.")
         else:
-            st.error("❌ Missing required fields. Please fill out Name, FEIN, Phone, States, and Resource Inventory.")
+            st.error("❌ Mandatory Field Blocker: Please populate all baseline requirements marked with an asterisk (*).")
 
 # Display persistent tracking details on the clean rerouted page state layout
 if st.session_state.form_submit_success:
