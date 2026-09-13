@@ -192,48 +192,50 @@ if submit_btn:
     elif not resource_inventory.strip():
         st.error("Validation Halt: Resource asset logging statement cannot be empty.")
     elif not compliance_check:
+        st.error("Validation Halt: You must certify the operational data parameters.")
+    elif conn is None:
+        st.error("Database Framework Timeout: Connection Engine is currently uninitialized.")
+    else:
+        with st.spinner("Processing transactional rows and writing to datastore cluster..."):
+            try:
+                existing_sheet_df = pd.DataFrame(conn.read(ttl="0d"))
+            except Exception:
+                existing_sheet_df = pd.DataFrame()
+                
+            states_field_value = ", ".join(state_footprint)
+            secondary_field_value = ", ".join(secondary_esf_selections) if secondary_esf_selections else "None Assigned"
+            combined_capacity_payload = f"Hotline: {primary_phone.strip()} | Inventory: {resource_inventory.strip()}"
+            
+            # SCHEMA ALIGNED EXACTLY TO LIVE SPREADSHEET HEADERS
+            new_record_payload = pd.DataFrame([{
+                "Org_ID": generate_org_id(),
+                "Organization_Name": org_name.strip(),
+                "EIN_Number": fein_num.strip(),
+                "Operation_Scope": op_scope,
+                "State_Supported": states_field_value,
+                "Counties_Covered": counties_string,
+                "Primary_ESF_Focus": primary_esf_selection,
+                "Secondary_ESFs": secondary_field_value,
+                "Resource_Capacity": combined_capacity_payload,
+                "Org_Logo_URL": logo_url.strip() if logo_url.strip() else "None Provided",
+                "Tax_Exempt_Doc_URL": doc_url.strip() if doc_url.strip() else "None Uploaded",
+                "Data_Verified": "TRUE",
+                "Verification_Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Verifying_Email": "system-ingestion@voad.registry.internal",
+                "Account_Status": "Active",
+                "Latitude": 0.0,
+                "Longitude": 0.0
+            }])
+            
+            if not existing_sheet_df.empty:
+                df_final_matrix = pd.concat([existing_sheet_df, new_record_payload], ignore_index=True)
+            else:
+                df_final_matrix = new_record_payload
 
-st.error("Validation Halt: You must certify the operational data parameters.")
-elif conn is None:
-st.error("Database Framework Timeout: Connection Engine is currently uninitialized.")
-else:
-with st.spinner("Processing transactional rows and writing to datastore cluster..."):
-try:
-existing_sheet_df = pd.DataFrame(conn.read(ttl="0d"))
-except Exception:
-existing_sheet_df = pd.DataFrame()
-states_field_value = ", ".join(state_footprint)
-secondary_field_value = ", ".join(secondary_esf_selections) if secondary_esf_selections 
-else "None Assigned"
-combined_capacity_payload = f"Hotline: {primary_phone.strip()} | Inventory:
-{resource_inventory.strip()}"
-# SCHEMA ALIGNED EXACTLY TO LIVE SPREADSHEET HEADERS
-new_record_payload = pd.DataFrame([{
-"Org_ID": generate_org_id(),
-"Organization_Name": org_name.strip(),
-"EIN_Number": fein_num.strip(),
-"Operation_Scope": op_scope,
-"State_Supported": states_field_value,
-"Counties_Covered": counties_string,
-"Primary_ESF_Focus": primary_esf_selection,
-"Secondary_ESFs": secondary_field_value,
-"Resource_Capacity": combined_capacity_payload,
-"Org_Logo_URL": logo_url.strip() if logo_url.strip() else "None Provided",
-"Tax_Exempt_Doc_URL": doc_url.strip() if doc_url.strip() else "None Uploaded",
-"Data_Verified": "TRUE","Verification_Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-"Verifying_Email": "system-ingestion@voad.registry.internal",
-"Account_Status": "Active",
-"Latitude": 0.0,
-"Longitude": 0.0
-}])
-if not existing_sheet_df.empty:
-df_final_matrix = pd.concat([existing_sheet_df, new_record_payload], ignore_index=True)
-else:
-df_final_matrix = new_record_payload
-
-try:conn.update(data=df_final_matrix)
-st.success(f"🎉 Transaction Confirmed! '{org_name.strip()}' has been successfully appended to the Master Registry Database.")
-st.balloons()
-except Exception as write_err:
-st.error("Write Blocked: Secure API authorization mapping failure.")
-st.info("Ensure that your Service Account email is assigned 'Editor' permissions inside the Google Sheet sharing window.")
+            try:
+                conn.update(data=df_final_matrix)
+                st.success(f"🎉 Transaction Confirmed! '{org_name.strip()}' has been successfully appended to the Master Registry Database.")
+                st.balloons()
+            except Exception as write_err:
+                st.error("Write Blocked: Secure API authorization mapping failure.")
+                st.info("Ensure that your Service Account email is assigned 'Editor' permissions inside the Google Sheet sharing window.")
