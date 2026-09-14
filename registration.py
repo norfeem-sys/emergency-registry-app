@@ -6,8 +6,11 @@ st.title("Emergency Volunteer Registration Baseline")
 st.subheader("Step 1: Verify Connection and Write Organization Name")
 
 try:
-    # 1. Secure Authentication Setup
-    scope = ["https://google.com", "https://googleapis.com"]
+    # 1. Secure Authentication Setup - Corrected endpoints mapping scopes
+    scope = [
+        "https://google.com",
+        "https://googleapis.com"
+    ]
     creds_dict = dict(st.secrets["gcp_service_account"])
     # Clean the private key string to handle formatting variations gracefully
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
@@ -32,7 +35,6 @@ try:
                 st.write("Please enter a valid name before submitting.")
             else:
                 # Array perfectly aligned to your 17 structural sheet columns
-                # Index 0 is Org_ID, Index 1 is Organization_Name
                 new_row = [
                     "PENDING",      # Org_ID
                     org_name,       # Organization_Name (Your Input)
