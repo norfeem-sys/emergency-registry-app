@@ -6,25 +6,37 @@ st.title("Emergency Volunteer Registration Baseline")
 st.subheader("Step 1: Verify Connection and Write Organization Name")
 
 try:
-    # Google API core scope mapping definitions
+    # 1. Broadest baseline scopes required for Google API endpoints
     scope = [
         "https://google.com",
         "https://googleapis.com"
     ]
     
-    # Extract secrets values directly from target TOML environment
+    # 2. Extract configuration dictionary safely
     creds_dict = dict(st.secrets["gcp_service_account"])
     
+    # 3. Clean up formatting variables dynamically
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
+    # 4. CRITICAL: Force the correct Google Auth gateway paths right here 
+    # This completely overrides any hidden broken URLs inside the secrets panel.
+    creds_dict["auth_uri"] = "https://google.com"
+    creds_dict["token_uri"] = "https://google.com"
+    creds_dict["auth_provider_x509_cert_url"] = "https://googleapis.com"
+    creds_dict["client_x509_cert_url"] = f"https://googleapis.com{creds_dict['client_email'].replace('@', '%40')}"
+
+    # 5. Authenticate explicitly with Google
     credentials = SACredentials.from_service_account_info(creds_dict, scopes=scope)
     gc = gspread.authorize(credentials)
 
-    # Establish Connection to the Spreadsheet Tab
+    # 6. Establish Connection to the Spreadsheet Tab
     sheet_id = "1CAXvQUPhOfq2QAxqVaaZ8IhPuUUfN13FlCj75EUbhhY"
     spreadsheet = gc.open_by_key(sheet_id)
     worksheet = spreadsheet.worksheet("Organizations")
     
     st.write("Secure connection to Google Sheet established successfully.")
 
+    # 7. Form Logic Block
     with st.form("simple_org_form"):
         org_name = st.text_input("Enter Organization Name:")
         submit_button = st.form_submit_button(label="Submit to Spreadsheet")
